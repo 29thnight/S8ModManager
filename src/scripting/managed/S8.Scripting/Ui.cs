@@ -23,7 +23,8 @@ public enum DialogKind
     CityMap
 }
 
-public readonly record struct UiRow(int Action, string Label, string Text, int Height = 64, bool Enabled = true);
+// Tab: the form tab that shows this row (see DialogComponent.Show tabs).
+public readonly record struct UiRow(int Action, string Label, string Text, int Height = 64, bool Enabled = true, int Tab = 0);
 [StructLayout(LayoutKind.Sequential)]
 internal unsafe struct NativeRow
 {
@@ -44,6 +45,14 @@ internal unsafe struct DialogSpec
     public int Count, Padding;
     public int* Selection;
     public int SelectionCount, SelectionPadding;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal unsafe struct DialogTabs
+{
+    public char** Labels;
+    public int Count, Reserved;
+    public fixed byte RowTabs[64];
 }
 
 public sealed class UiScene : IDisposable
@@ -126,6 +135,8 @@ public sealed unsafe class DialogComponent : Component
     public Action<InputResult, string>? TextCompleted;
     public Action<bool, int>? NumberCompleted;
     public Action<int>? TreeClicked;
+    // Raised with the new tab index when the player switches a form tab.
+    public Action<int>? TabChanged;
 
     public void Show(
         DialogKind kind,
@@ -134,10 +145,16 @@ public sealed unsafe class DialogComponent : Component
         bool confirmCloses = true,
         string caption = "항목을 선택해 주십시오",
         IReadOnlyList<int>? initialSelection = null,
-        ushort sourceCityId = 0)
+        ushort sourceCityId = 0,
+        IReadOnlyList<string>? tabs = null)
     {
         if (kind is not (DialogKind.Form or DialogKind.CompactForm) && rows.Any(row => !row.Enabled))
             throw new ArgumentException("Disabled rows require a form dialog.", nameof(rows));
+        if (tabs != null && (kind != DialogKind.Form || tabs.Count is < 2 or > 8 ||
+                             rows.Any(row => row.Action is < 0 or >= 64 || row.Tab < 0 || row.Tab >= tabs.Count)))
+            throw new ArgumentException("Tabs need a form dialog, 2..8 tabs and rows with actions 0..63 on an existing tab.", nameof(tabs));
+        if (tabs == null && rows.Any(row => row.Tab != 0))
+            throw new ArgumentException("Row tabs require dialog tabs.", nameof(rows));
 
         var allocations = new List<nint>();
         var nativeRows = new NativeRow[rows.Count];
@@ -178,6 +195,9 @@ public sealed unsafe class DialogComponent : Component
                     SelectionCount = selection.Length
                 };
 
+                // Tabs are part of the dialog's construction, so they precede ShowDialog.
+                if (tabs != null)
+                    SetTabs(tabs, rows, allocations);
                 Native.Call(Operation.ShowDialog, data: &spec, bytes: (uint)sizeof(DialogSpec));
             }
 
@@ -189,6 +209,27 @@ public sealed unsafe class DialogComponent : Component
         {
             foreach (nint allocation in allocations)
                 Marshal.FreeHGlobal(allocation);
+        }
+    }
+
+    private void SetTabs(IReadOnlyList<string> tabs, IReadOnlyList<UiRow> rows, List<nint> allocations)
+    {
+        var labels = new char*[tabs.Count];
+        for (int i = 0; i < tabs.Count; ++i)
+        {
+            nint label = Marshal.StringToHGlobalUni(tabs[i]);
+            allocations.Add(label);
+            labels[i] = (char*)label;
+        }
+
+        var spec = new DialogTabs { Count = tabs.Count };
+        foreach (var row in rows)
+            spec.RowTabs[row.Action] = (byte)row.Tab;
+
+        fixed (char** pointers = labels)
+        {
+            spec.Labels = pointers;
+            Native.Call(Operation.SetDialogTabs, (ulong)Owner, data: &spec, bytes: (uint)sizeof(DialogTabs));
         }
     }
 
@@ -298,6 +339,9 @@ public sealed unsafe class DialogComponent : Component
             case ScriptEvent.NumberInput:
                 NumberCompleted?.Invoke(value >= 0, value);
                 break;
+            case ScriptEvent.TabChanged:
+                TabChanged?.Invoke(value);
+                break;
         }
     }
 
@@ -309,6 +353,7 @@ public sealed unsafe class DialogComponent : Component
         TextCompleted = null;
         NumberCompleted = null;
         TreeClicked = null;
+        TabChanged = null;
     }
 
     [StructLayout(LayoutKind.Sequential)]

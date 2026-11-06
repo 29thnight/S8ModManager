@@ -27,6 +27,7 @@ unsafe class Program
     static int[] selectedJewels = [];
     static bool windowDirty;
     static (byte Present, int Voice, string? Name)? publishedTraits;
+    static (int Owner, string[] Labels, byte[] RowTabs)? dialogTabs;
     static int councilUiRequests;
     static bool councilUiAuthority = true;
     static bool councilUiComplete;
@@ -133,7 +134,13 @@ unsafe class Program
         Check(Send(ScriptEvent.Select, catalog, 0) == 0, "Selection dispatch");
         var detail = views[^1];
 
-        Check(detail.Rows.Count == 10 && detail.Rows[0].Label == "이름", "C# composes detail form");
+        Check(detail.Rows.Count == 11 && detail.Rows[0].Label == "이름", "C# composes detail form");
+        Check(dialogTabs is { } tabs && tabs.Owner == detail.Owner && tabs.Labels.SequenceEqual(["기본", "효과"]) &&
+              tabs.RowTabs[1] == 0 && tabs.RowTabs[10] == 0 && tabs.RowTabs[2] == 1 && tabs.RowTabs[11] == 1,
+              "Detail form groups rows into basic and effect tabs");
+        Check(detail.Rows.Single(r => r.Action == 10).Label == "기재 등급" &&
+              !detail.Rows.Single(r => r.Action == 11).Enabled, "Grade row and disabled script effect row");
+        Check(Send(ScriptEvent.TabChanged, detail.Owner, 1) == 0, "Tab change reaches the dialog");
         Check(Send(ScriptEvent.Click, detail.Owner, 2) == 0, "Effect editor dispatch");
         int effects = views[^1].Owner;
 
@@ -540,6 +547,15 @@ unsafe class Program
                     return -1;
                 char* name = *(char**)data;
                 publishedTraits = (((byte*)data)[52], *(int*)((byte*)data + 68), name == null ? null : new string(name));
+                return 0;
+            case 63: // SetDialogTabs: labels, count, reserved, row tab per action.
+                if (bytes != 80)
+                    return -1;
+                int tabCount = *(int*)((byte*)data + 8);
+                char** tabLabels = *(char***)data;
+                dialogTabs = ((int)target,
+                    Enumerable.Range(0, tabCount).Select(i => new string(tabLabels[i])).ToArray(),
+                    new Span<byte>((byte*)data + 16, 64).ToArray());
                 return 0;
             case 23: // ReadSelection
                 selectedJewels.AsSpan().CopyTo(new Span<int>(data, (int)bytes / 4));

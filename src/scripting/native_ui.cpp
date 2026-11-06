@@ -185,6 +185,13 @@ namespace s8::scripting {
       bool hide_form_decoration = false;
       bool close_requested = false;
 
+      // Form tabs: the dialog's own list tab bar, with rows grouped by tab.
+      std::vector<std::wstring> tab_labels;
+      std::vector<NativeListTab> tab_config;
+      std::array<std::uint8_t, 64> row_tabs{};
+      std::array<std::array<void *, 2>, 64> row_nodes{}; // button pane, value text
+      int tab = 0;
+
       std::wstring title, caption, input_initial;
       int input_limit = 0;
       void *dialog = nullptr;
@@ -211,6 +218,12 @@ namespace s8::scripting {
       void *text_input_layout = nullptr;
 
       std::wstring input_result;
+
+      // SetDialogTabs arrives before ShowDialog: the dialog config takes the tab
+      // array when the dialog is shown, not when its controls are created.
+      int pending_tabs_owner = 0;
+      std::vector<std::wstring> pending_tab_labels;
+      std::array<std::uint8_t, 64> pending_row_tabs{};
     } native_ui_session;
 
     struct TreeView {
@@ -531,6 +544,57 @@ namespace s8::scripting {
       return {pane, button};
     }
 
+    // The list dialog's tab bar (CTabGroup). Its tab-change event 0x44C passes the
+    // group itself; the selected tab index is the group's control value at +0x88.
+    constexpr int native_tab_changed_event = 0x44C;
+
+    bool is_native_tab_group(void *part) {
+      return native_field<std::uintptr_t>(part, 0) == native_ui_module + 0x2590FA8;
+    }
+
+    void apply_native_tab(NativeDialogFrame &frame) {
+      for (const auto &row : frame.visible) {
+        if (row.action >= frame.row_tabs.size())
+          continue;
+        const bool shown = frame.row_tabs[row.action] == frame.tab;
+        for (void *node : frame.row_nodes[row.action])
+          if (node)
+            reinterpret_cast<void (*)(void *, bool)>(native_ui_module + 0x1D15BC0)(node, shown);
+        if (void *button = frame.buttons[row.action]) {
+          auto *vtable = native_field<std::uintptr_t *>(button, 0);
+          reinterpret_cast<void (*)(void *, bool)>(vtable[0x108 / 8])(button, shown);
+        }
+      }
+    }
+
+    void bind_native_tabs(void *dialog, void *group) {
+      // The dialog registered its own list-tab handler; a form has no list to
+      // switch, so clear that entry and route the change to the script instead.
+      auto **heads = *reinterpret_cast<void ***>(native_ui_module + 0x34C8630);
+      if (void *events = native_field<void *>(group, 0x80)) {
+        for (void *node = heads[native_field<std::uint32_t>(events, 0)]; node; node = native_field<void *>(node, 8)) {
+          void *entry = native_field<void *>(node, 0);
+          if (native_field<int>(entry, 0) == native_tab_changed_event)
+            *reinterpret_cast<std::function<void(void *)> *>(static_cast<std::byte *>(entry) + 8) = nullptr;
+        }
+      }
+
+      std::function<void(void *)> changed = [dialog](void *source) {
+        auto &session = native_ui_session;
+        if (session.frames.empty() || session.frame().dialog != dialog || session.text_input_open)
+          return;
+        auto &frame = session.frame();
+        const int tab = native_field<int>(source, 0x88);
+        if (tab == frame.tab || tab < 0 || static_cast<std::size_t>(tab) >= frame.tab_labels.size())
+          return;
+        frame.tab = tab;
+        apply_native_tab(frame);
+        dispatch_mod_event(scripting::Event::TabChanged, frame.script_owner, tab);
+      };
+      reinterpret_cast<void (*)(void *, int, void *)>(native_ui_module + 0xEF40)(group, native_tab_changed_event,
+                                                                               &changed);
+    }
+
     void native_ui_dialog_initialized(void *dialog, void *config) {
       reinterpret_cast<void (*)(void *, void *)>(native_ui_dialog_hook.original)(dialog, config);
 
@@ -620,6 +684,11 @@ namespace s8::scripting {
       if (!list_page)
         for (std::size_t offset : {0x250u, 0x268u, 0x270u}) {
           void *part = native_field<void *>(dialog, offset);
+
+          if (part && !session.frame().tab_config.empty() && is_native_tab_group(part)) {
+            bind_native_tabs(dialog, part);
+            continue;
+          }
 
           if (part) {
             auto *vtable = native_field<std::uintptr_t *>(part, 0);
@@ -757,7 +826,9 @@ namespace s8::scripting {
       }
       // Resource-based dialogs bypass the descriptor factory. Create native children
       // after the resource layout exists, using the same constructors as type 14/1.
-      int y = session.frame().page == NativeDialogStyle::Form ? 240 : 430;
+      // Each tab lays its rows out from the top; without tabs every row is on tab 0.
+      std::array<int, 8> tab_y{};
+      tab_y.fill(session.frame().page == NativeDialogStyle::Form ? 240 : 430);
 
       const int button_x = compact ? 600 : 280;
       const int text_x = compact ? 850 : 530;
@@ -766,6 +837,7 @@ namespace s8::scripting {
         const auto *row = &session.frame().visible[index];
         const bool confirm = session.frame().page == NativeDialogStyle::Message;
         const std::size_t action = row->action;
+        int &y = tab_y[action < session.frame().row_tabs.size() ? session.frame().row_tabs[action] : 0];
 
         const auto [label_x, label_y, font_size] = confirm ? std::array<int, 3>{} : session.frame().button_labels[action];
 
@@ -794,6 +866,8 @@ namespace s8::scripting {
           native_field<void **>(group, 8)[control_id] = pane;
           reinterpret_cast<void (*)(void *, int, void *)>(native_ui_module + 0x1D16E10)(group, control_id, button);
           session.frame().buttons[action] = button;
+          if (action < session.frame().row_nodes.size())
+            session.frame().row_nodes[action][0] = pane;
           if (session.frame().disabled[action]) {
             reinterpret_cast<void (*)(void *, bool)>(button_vtable[0x110 / 8])(button, false);
             reinterpret_cast<void (*)(void *, bool)>(button_vtable[0x120 / 8])(button, false);
@@ -857,11 +931,14 @@ namespace s8::scripting {
           create_text(label_x, label_y, session.frame().button_bounds[action][2], font_size + 8,
                       row->label.c_str(), font_size, 0);
         if (!session.frame().hide_form_decoration && action < session.frame().text_nodes.size())
-          session.frame().text_nodes[action] = create_text(
+          session.frame().text_nodes[action] = session.frame().row_nodes[action][1] = create_text(
               text_x, y + 12, compact ? 450 : 1110, row->height > 64 ? row->height : 60, row->text.c_str(), 24, 1);
 
         y += row->height;
       }
+
+      if (!session.frame().tab_config.empty())
+        apply_native_tab(session.frame());
 
       if (session.frame().page == NativeDialogStyle::Text || session.frame().page == NativeDialogStyle::MultilineText)
         begin_native_ui_text_input(dialog);
@@ -1028,6 +1105,16 @@ namespace s8::scripting {
         frame.visible.push_back({spec.rows[i].label, spec.rows[i].text, static_cast<std::size_t>(spec.rows[i].action),
                                  spec.rows[i].height});
 
+      if (session.pending_tabs_owner == spec.owner && page == NativeDialogStyle::Form) {
+        frame.tab_labels = std::move(session.pending_tab_labels);
+        for (const auto &label : frame.tab_labels)
+          frame.tab_config.push_back({native_column_order.data(), label.c_str(), 0xFFFF});
+        frame.tab_config.push_back({}); // terminator: the dialog counts tabs up to a null column list
+        frame.row_tabs = session.pending_row_tabs;
+      }
+      session.pending_tabs_owner = 0;
+      session.pending_tab_labels.clear();
+
       if (page == NativeDialogStyle::CityMap) {
         // The original selector owns its map, native city list/detail windows,
         // animation and cancellation. Mode 3 selects a city; it does not dispatch a march.
@@ -1130,7 +1217,8 @@ namespace s8::scripting {
       alignas(16) std::array<std::byte, 0x2580> config{};
       reinterpret_cast<void (*)(void *)>(native_ui_module + 0x1A870)(config.data());
       native_field<void *>(config.data(), 0) = session.frame().native_rows.data();
-      native_field<const void *>(config.data(), 8) = native_list_tabs.data();
+      native_field<const void *>(config.data(), 8) =
+          session.frame().tab_config.empty() ? native_list_tabs.data() : session.frame().tab_config.data();
       native_field<int>(config.data(), 0x10) = static_cast<int>(session.frame().visible.size());
       native_field<const void *>(config.data(), 0x18) = native_list_columns.data();
       native_field<int>(config.data(), 0x20) = page == NativeDialogStyle::MultiSelect ? 2 : 1;

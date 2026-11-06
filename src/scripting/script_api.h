@@ -2,7 +2,7 @@
 #include <cstdint>
 
 namespace s8::scripting {
-  inline constexpr std::uint32_t api_version = 18;
+  inline constexpr std::uint32_t api_version = 19;
   inline constexpr std::uint64_t ui_capability = 1, data_capability = 2, memory_capability = 4;
   enum class Status : int {
     Ready = 0,
@@ -84,7 +84,8 @@ namespace s8::scripting {
     TalkCompleted,
     MonthChanged,
     CouncilEntered,
-    CouncilRoomReady
+    CouncilRoomReady,
+    TabChanged
   };
   enum class Operation : int {
     ShowDialog,
@@ -149,7 +150,8 @@ namespace s8::scripting {
     SetFormButtonIcon,
     ReadArchiveResource,
     SetJewelForceMask,
-    SetTraitCatalog
+    SetTraitCatalog,
+    SetDialogTabs
   };
 
   // SetTraitCatalog: one record per trait ID 1..254 (index = ID - 1). The C# mod
@@ -192,6 +194,15 @@ namespace s8::scripting {
   };
 
   static_assert(sizeof(DialogSpec) == 64);
+
+  // SetDialogTabs: game tab bar on a form dialog. Each row shows only on its tab;
+  // switching tabs raises Event::TabChanged with the new tab index.
+  struct DialogTabs {
+    const wchar_t *const *labels;
+    int count, reserved;
+    std::uint8_t row_tabs[64]; // indexed by row action
+  };
+  static_assert(sizeof(DialogTabs) == 80);
 
   struct TextInput {
     const wchar_t *initial;

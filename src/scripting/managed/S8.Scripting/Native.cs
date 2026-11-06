@@ -62,7 +62,8 @@ public enum ScriptEvent
     TalkCompleted,
     MonthChanged,
     CouncilEntered,
-    CouncilRoomReady
+    CouncilRoomReady,
+    TabChanged
 }
 
 internal enum Operation
@@ -129,7 +130,8 @@ internal enum Operation
     SetFormButtonIcon,
     ReadArchiveResource,
     SetJewelForceMask,
-    SetTraitCatalog
+    SetTraitCatalog,
+    SetDialogTabs
 }
 
 [StructLayout(LayoutKind.Sequential)]

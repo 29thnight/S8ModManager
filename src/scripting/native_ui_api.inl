@@ -206,6 +206,25 @@ std::int64_t script_engine_invoke(scripting::Operation operation, std::uint64_t 
       (script_callback_event == scripting::Event::TextInput || script_callback_event == scripting::Event::NumberInput))
     return -8;
 
+  if (operation == Operation::SetDialogTabs) {
+    // Tabs for the next ShowDialog of this owner (a form); rows are checked by the caller.
+    if (!data || bytes != sizeof(scripting::DialogTabs) || argument || target == 0 || target > INT32_MAX)
+      return -1;
+    const auto &tabs = *static_cast<const scripting::DialogTabs *>(data);
+    if (!tabs.labels || tabs.count < 2 || tabs.count > 8)
+      return -1;
+    for (int i = 0; i < tabs.count; ++i)
+      if (!tabs.labels[i] || !*tabs.labels[i] || wcsnlen_s(tabs.labels[i], 64) == 64)
+        return -1;
+    if (std::any_of(std::begin(tabs.row_tabs), std::end(tabs.row_tabs), [&](auto tab) { return tab >= tabs.count; }))
+      return -1;
+
+    session.pending_tabs_owner = static_cast<int>(target);
+    session.pending_tab_labels.assign(tabs.labels, tabs.labels + tabs.count);
+    std::copy(std::begin(tabs.row_tabs), std::end(tabs.row_tabs), session.pending_row_tabs.begin());
+    return 0;
+  }
+
   if (operation == Operation::ShowDialog) {
     if (!data || bytes != sizeof(scripting::DialogSpec) || session.frames.size() >= 16 || session.text_input_open)
       return -1;

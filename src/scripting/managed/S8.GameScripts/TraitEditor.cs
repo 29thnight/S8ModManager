@@ -23,6 +23,10 @@ public sealed class TraitEditorModule : IDisposable
     private string? pendingError;
     private Store store = null!;
     private readonly Dictionary<ushort, (string Name, string Description)> accepted = [];
+    // Detail page tabs. Row actions: 0 name, 1 description, 2..7 effects, 9 voice,
+    // 10 grade, 11 scripted effect (reserved for script extension).
+    private static readonly string[] DetailTabs = ["기본", "효과"];
+    private const int BasicTab = 0, EffectTab = 1, ScriptEffectAction = 11;
     private static readonly (ushort Id, string Label)[] Voices = [
         (0, "없음"),
         (3, "일신시담"),
@@ -142,7 +146,9 @@ public sealed class TraitEditorModule : IDisposable
             button.Bind(detail, row.Action);
             button.Clicked = () =>
             {
-                if (row.Action < 2)
+                if (row.Action == ScriptEffectAction)
+                    return;
+                else if (row.Action < 2)
                     EditText(row.Action == 1);
                 else if (row.Action == 10)
                     SelectGrade();
@@ -186,7 +192,7 @@ public sealed class TraitEditorModule : IDisposable
 
             ShowPendingError();
         };
-        detail.Show(DialogKind.Form, "기재 편집", DetailRows());
+        detail.Show(DialogKind.Form, "기재 편집", DetailRows(), tabs: DetailTabs);
     }
 
     private UiRow[] DetailRows()
@@ -194,21 +200,23 @@ public sealed class TraitEditorModule : IDisposable
         var current = draft!;
         var rows = new List<UiRow>
         {
-            new(0, "이름", current.Name),
-            new(1, "설명", current.Description, 104)
+            new(0, "이름", current.Name, Tab: BasicTab),
+            new(1, "설명", current.Description, 104, Tab: BasicTab),
+            new(9, "발동 음성", VoiceLabel(current.Voice), Tab: BasicTab),
+            new(10, "기재 등급", GradeLabel(current.Grade), Tab: BasicTab)
         };
 
         for (int i = 0; i < 6; ++i)
 #if S8_EXPERIMENTAL
             rows.Add(new(i + 2, $"효과 {i + 1}", current.ScriptEffects[i] is { } script
                 ? ScriptedTraits.Effects.FirstOrDefault(effect => effect.Id == script)?.Name ?? script
-                : Describe(current.Effects[i])));
+                : Describe(current.Effects[i]), Tab: EffectTab));
 #else
-            rows.Add(new(i + 2, $"효과 {i + 1}", Describe(current.Effects[i])));
+            rows.Add(new(i + 2, $"효과 {i + 1}", Describe(current.Effects[i]), Tab: EffectTab));
 #endif
 
-        rows.Add(new(9, "발동 음성", VoiceLabel(current.Voice)));
-        rows.Add(new(10, "기재 색상", GradeLabel(current.Grade)));
+        // Scripted effects arrive with the scripting extension; the slot is shown but disabled.
+        rows.Add(new(ScriptEffectAction, "스크립트 효과", "추후 스크립팅 확장에서 지원합니다.", Enabled: false, Tab: EffectTab));
         return rows.ToArray();
     }
 
@@ -283,12 +291,20 @@ public sealed class TraitEditorModule : IDisposable
             Voices.Select(v => new UiRow(v.Id, VoiceLabel(v.Id), v.Id == 0 ? "캐릭터 음성을 재생하지 않습니다." : "발동 캐릭터의 음성으로 재생합니다.")).ToArray());
     }
 
+    // The game stores the badge colour as the grade: gold, green, red.
     private static string GradeLabel(ushort grade) => grade switch
     {
-        1 => "금색",
-        2 => "녹색 · 긍정 효과",
-        3 => "적색 · 부정 효과",
+        1 => "고유",
+        2 => "범용",
+        3 => "제약",
         _ => $"미지정 ({grade})"
+    };
+
+    private static string GradeDescription(int grade) => grade switch
+    {
+        1 => "특정 무장만의 기재입니다. 금색 배지로 표시됩니다.",
+        2 => "여러 무장이 가질 수 있는 긍정 기재입니다. 녹색 배지로 표시됩니다.",
+        _ => "능력을 제한하는 부정 기재입니다. 적색 배지로 표시됩니다."
     };
 
     private void SelectGrade()
@@ -301,8 +317,8 @@ public sealed class TraitEditorModule : IDisposable
             if (confirmed)
                 draft!.Grade = checked((ushort)id);
         };
-        dialog.Show(DialogKind.List, "기재 색상", Enumerable.Range(1, 3)
-            .Select(grade => new UiRow(grade, GradeLabel((ushort)grade), "기재 배지와 목록에 표시할 색상입니다.")).ToArray());
+        dialog.Show(DialogKind.List, "기재 등급", Enumerable.Range(1, 3)
+            .Select(grade => new UiRow(grade, GradeLabel((ushort)grade), GradeDescription(grade))).ToArray());
     }
 
     private void SelectEffect(int slot)
