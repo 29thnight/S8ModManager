@@ -1,0 +1,9 @@
+[submodule "third_party/minhook"]
+	path = third_party/minhook
+	url = https://github.com/TsudaKageyu/minhook.git
+[submodule "third_party/nlohmann_json"]
+	path = third_party/nlohmann_json
+	url = https://github.com/nlohmann/json.git
+[submodule "third_party/ownership_cpp"]
+	path = third_party/ownership_cpp
+	url = https://github.com/29thnight/ownership_cpp.git

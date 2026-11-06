@@ -1,0 +1,33 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 18
+VisualStudioVersion = 18.0.0.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "S8.Scripting.Native", "src\scripting\S8.Scripting.Native.vcxproj", "{38C56361-7252-4CB5-87D5-B9059B473DEC}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "S8.MinHook", "src\platform\windows\S8.MinHook.vcxproj", "{CFD9C034-41D1-4619-8D9C-2539C7F19F4C}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "S8.ModManager.Tests", "tests\S8.ModManager.Tests.vcxproj", "{7A3C2E51-9B4D-4F2A-8E61-5D0C3B7A9E14}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{38C56361-7252-4CB5-87D5-B9059B473DEC}.Debug|x64.ActiveCfg = Debug|x64
+		{38C56361-7252-4CB5-87D5-B9059B473DEC}.Debug|x64.Build.0 = Debug|x64
+		{38C56361-7252-4CB5-87D5-B9059B473DEC}.Release|x64.ActiveCfg = Release|x64
+		{38C56361-7252-4CB5-87D5-B9059B473DEC}.Release|x64.Build.0 = Release|x64
+		{CFD9C034-41D1-4619-8D9C-2539C7F19F4C}.Debug|x64.ActiveCfg = Debug|x64
+		{CFD9C034-41D1-4619-8D9C-2539C7F19F4C}.Debug|x64.Build.0 = Debug|x64
+		{CFD9C034-41D1-4619-8D9C-2539C7F19F4C}.Release|x64.ActiveCfg = Release|x64
+		{CFD9C034-41D1-4619-8D9C-2539C7F19F4C}.Release|x64.Build.0 = Release|x64
+		{7A3C2E51-9B4D-4F2A-8E61-5D0C3B7A9E14}.Debug|x64.ActiveCfg = Debug|x64
+		{7A3C2E51-9B4D-4F2A-8E61-5D0C3B7A9E14}.Debug|x64.Build.0 = Debug|x64
+		{7A3C2E51-9B4D-4F2A-8E61-5D0C3B7A9E14}.Release|x64.ActiveCfg = Debug|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

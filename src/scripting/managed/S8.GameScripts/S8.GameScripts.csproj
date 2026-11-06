@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Version>0.0.1</Version>
+    <!-- 0.0.1 ships trait and jewel editing only. Unfinished features build for development
+         (Debug) and are compiled out of Release unless S8Experimental=true is passed. -->
+    <S8Experimental Condition="'$(S8Experimental)'=='' and '$(Configuration)'=='Release'">false</S8Experimental>
+    <S8Experimental Condition="'$(S8Experimental)'==''">true</S8Experimental>
+    <DefineConstants Condition="'$(S8Experimental)'=='true'">$(DefineConstants);S8_EXPERIMENTAL</DefineConstants>
+    <DefineConstants Condition="'$(PublishAot)'=='true'">$(DefineConstants);S8_AOT</DefineConstants>
+    <NativeLib Condition="'$(PublishAot)'=='true'">Shared</NativeLib>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(S8Experimental)'!='true'">
+    <Compile Remove="CouncilStrategyMenu.cs;CouncilStrategySetup.cs;MarchExecutionProbe.cs;PersonalActivityProbe.cs;ScriptedTraits.cs;WoundedRecovery.cs" />
+  </ItemGroup>
+  <ItemGroup><ProjectReference Include="..\S8.Scripting\S8.Scripting.csproj" /></ItemGroup>
+  <!-- GameApplication discovers GameSetup types by reflection; keep them through trimming. -->
+  <ItemGroup Condition="'$(PublishAot)'=='true'">
+    <TrimmerRootAssembly Include="S8.GameScripts" />
+    <TrimmerRootAssembly Include="S8.Scripting" />
+  </ItemGroup>
+  <!-- dotnet publish -c Release -r win-x64 -p:PublishAot=true -o <game>\scripts\mods\s8.editors.aot -->
+  <Target Name="S8WriteAotManifest" AfterTargets="Publish" Condition="'$(PublishAot)'=='true'">
+    <Copy SourceFiles="mod.aot.json" DestinationFiles="$(PublishDir)mod.json" />
+    <Copy SourceFiles="..\..\..\..\resources\effect_definitions.json;..\..\..\..\resources\jewel_definitions.json" DestinationFolder="$(PublishDir)assets" />
+  </Target>
+</Project>
