@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace S8.GameScripts;
 
-public sealed class JewelEditorModule : IScriptModule
+public sealed class JewelEditorModule : IDisposable
 {
     private readonly UiScene dataScene = new();
     private JewelComponent data = null!;
@@ -50,36 +50,20 @@ public sealed class JewelEditorModule : IScriptModule
         File.Move(temporary, forcedPath, true);
     }
 
-    public void Dispatch(ScriptEvent kind, int owner, int value)
+    // The game window closed; an accepted window commits its draft.
+    public void CloseWindow(int owner, bool accepted)
     {
-        if (kind == ScriptEvent.WindowClosing)
-        {
-            if (!drafts.Remove(owner, out var transaction))
-                return;
-
-            if (value == 1)
-                Commit(transaction);
-
-            return;
-        }
-
-        if (kind == ScriptEvent.WindowClick)
-        {
-            Open(owner);
-            return;
-        }
-
-        if (kind == ScriptEvent.Closed)
-        {
-            scene?.Dispose();
-            scene = null;
-            return;
-        }
-
-        scene?.Dispatch(kind, owner, value);
+        if (drafts.Remove(owner, out var transaction) && accepted)
+            Commit(transaction);
     }
 
-    private void Open(int owner)
+    public void CloseUi()
+    {
+        scene?.Dispose();
+        scene = null;
+    }
+
+    public void Open(int owner)
     {
         var current = data.Read();
         window = owner;

@@ -6,7 +6,7 @@ using System.Text.RegularExpressions;
 namespace S8.GameScripts;
 
 // This is a mod. No editor command, page ID, draft or save request is sent to C++.
-public sealed class TraitEditorModule : IScriptModule
+public sealed class TraitEditorModule : IDisposable
 {
 #if S8_EXPERIMENTAL
     // Scripted effects are unfinished and excluded from release builds (0.0.1 ships trait and jewel editing only).
@@ -63,24 +63,7 @@ public sealed class TraitEditorModule : IScriptModule
         }
     }
 
-    public void Dispatch(ScriptEvent kind, int owner, int value)
-    {
-        if (kind == ScriptEvent.Open)
-        {
-            Open();
-            return;
-        }
-
-        if (kind == ScriptEvent.Closed)
-        {
-            Dispose();
-            return;
-        }
-
-        scene?.Dispatch(kind, owner, value);
-    }
-
-    private void Open()
+    public void Open()
     {
         Dispose();
         scene = new UiScene();

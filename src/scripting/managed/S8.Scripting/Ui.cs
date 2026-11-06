@@ -51,8 +51,18 @@ public sealed class UiScene : IDisposable
     private readonly Dictionary<int, DialogComponent> dialogs = [];
     private readonly List<GameObject> objects = [];
     private static int nextOwner;
+    // Which scene created each live dialog, so ScriptMod can route dialog events.
+    private static readonly Dictionary<int, UiScene> owners = [];
 
     internal bool ContainsOwner(int owner) => dialogs.ContainsKey(owner);
+
+    internal static bool Route(ScriptEvent kind, int owner, int value)
+    {
+        if (!owners.TryGetValue(owner, out var scene))
+            return false;
+        scene.Dispatch(kind, owner, value);
+        return true;
+    }
 
     public GameObject CreateObject(string name)
     {
@@ -69,6 +79,7 @@ public sealed class UiScene : IDisposable
 
         dialog.Owner = checked(++nextOwner);
         dialogs.Add(dialog.Owner, dialog);
+        owners.Add(dialog.Owner, this);
         return dialog;
     }
 
@@ -86,6 +97,7 @@ public sealed class UiScene : IDisposable
             if (kind == ScriptEvent.Closing)
             {
                 dialogs.Remove(owner);
+                owners.Remove(owner);
                 objects.Remove(dialog.GameObject);
                 dialog.GameObject.Dispose();
             }
@@ -98,6 +110,8 @@ public sealed class UiScene : IDisposable
             gameObject.Dispose();
 
         objects.Clear();
+        foreach (int owner in dialogs.Keys)
+            owners.Remove(owner);
         dialogs.Clear();
     }
 }

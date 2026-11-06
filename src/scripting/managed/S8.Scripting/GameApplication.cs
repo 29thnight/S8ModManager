@@ -21,8 +21,9 @@ public sealed class GameApplication : IDisposable
             .Select(type => type.GetConstructor(Type.EmptyTypes)
                 ?? throw new InvalidOperationException($"Game setup {type.FullName} requires a public parameterless constructor."))
             .ToArray();
-        World = new GameWorld(
-            JewelCatalog.Load(Path.Combine(context.AssetDirectory, "jewel_definitions.json")), assembly)
+        // Optional: only mods that use JewelComponent ship this catalog.
+        string jewels = Path.Combine(context.AssetDirectory, "jewel_definitions.json");
+        World = new GameWorld(File.Exists(jewels) ? JewelCatalog.Load(jewels) : null, assembly)
         {
             Application = this
         };

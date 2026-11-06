@@ -117,6 +117,7 @@ unsafe class Program
         Check(Send(ScriptEvent.Open) == (int)ConnectionStatus.MissingCapability, "Unavailable service rejected when first used");
         api.Connection.Capabilities = NativeCapability.Ui | NativeCapability.GameData | NativeCapability.Memory;
         Check(Send(ScriptEvent.Open) == 0, "Manifest loads a mod");
+        Check(Send(ScriptEvent.MenuClick, 0, 0) == 0, "Registered menu opens the trait editor");
         Check(views[^1].Kind == DialogKind.List && views[^1].Rows.Count == 1, "Catalog built from engine data");
         int catalog = views[^1].Owner;
 
@@ -143,7 +144,7 @@ unsafe class Program
         Check(Send(ScriptEvent.Closing, voices, 3) == 0, "Voice callback");
         Check(Send(ScriptEvent.Closing, detail.Owner, -1) == 0 && !File.Exists(config), "Cancel does not persist");
         Check(Send(ScriptEvent.Closed) == 0, "Components disposed");
-        Check(Send(ScriptEvent.Open) == 0, "Session reopened");
+        Check(Send(ScriptEvent.MenuClick, 0, 1) == 0, "Session reopened from the in-game menu");
         catalog = views[^1].Owner;
         Check(Send(ScriptEvent.Select, catalog, 0) == 0, "Record reopened");
         detail = views[^1];
