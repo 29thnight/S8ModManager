@@ -50,25 +50,42 @@ public static unsafe class Entry
     {
         private AssemblyLoadContext? context;
         private IScriptModule? module;
+        private Assembly? loadedAssembly;
         private string? loadedIdentity;
+        private LiveSource? live;
+        private bool swapPending;
 
         public string Id { get; } = id;
 
-        // Live coding: a rebuilt assembly replaces the running module on the next
-        // open, unless the module holds unsaved state.
+        // Live coding: with a source\ folder, edited method bodies apply in place on
+        // the next event (hot reload). Otherwise, or for structural edits, a rebuilt
+        // assembly replaces the running module on the next open, unless the module
+        // holds unsaved state.
         public IScriptModule? Resolve(int kind)
         {
+            if (live != null && loadedAssembly != null && live.HasChanges())
+            {
+                swapPending |= !live.TryPatch(loadedAssembly, out string reason);
+                System.Diagnostics.Trace.WriteLine($"[S8 live] {Id}: {reason}");
+            }
+
             if (!ModDispatch.IsLoadEvent(kind))
                 return module;
 
             string manifest = Path.Combine(modDirectory, "mod.json");
             string identity = File.GetLastWriteTimeUtc(assembly).Ticks + ":" + File.GetLastWriteTimeUtc(manifest).Ticks;
+            bool stale = live != null ? swapPending : identity != loadedIdentity;
 
-            if (module != null && (identity == loadedIdentity || !module.CanReload))
+            if (module != null && (!stale || !module.CanReload))
                 return module;
 
+            if (module == null)
+                live = LiveSource.Find(modDirectory, assembly);
+            else if (live != null)
+                live.Rebuild();
+
             var next = new ScriptContext(assembly);
-            using var stream = new MemoryStream(File.ReadAllBytes(assembly));
+            using var stream = new MemoryStream(live?.Image ?? File.ReadAllBytes(assembly));
             var loaded = next.LoadFromStream(stream);
             var sdk = typeof(IScriptModule).Assembly.GetName();
             var reference = loaded.GetReferencedAssemblies().FirstOrDefault(candidate => candidate.Name == sdk.Name);
@@ -86,7 +103,9 @@ public static unsafe class Entry
             context?.Unload();
             context = next;
             module = replacement;
+            loadedAssembly = loaded;
             loadedIdentity = identity;
+            swapPending = false;
             return module;
         }
     }

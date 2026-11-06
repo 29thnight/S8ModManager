@@ -99,6 +99,10 @@ namespace {
     if (!init || !get_delegate || !close)
       return false;
 
+    // Lets the host apply method-body edits to Debug-built mods in place (hot
+    // reload). The runtime reads it once at start; Release assemblies are unaffected.
+    SetEnvironmentVariableW(L"DOTNET_MODIFIABLE_ASSEMBLIES", L"debug");
+
     hostfxr_handle context = nullptr;
 
     const auto config = directory / L"S8.Scripting.Host.runtimeconfig.json";

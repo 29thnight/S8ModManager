@@ -1,4 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><TargetFramework>net10.0</TargetFramework><AllowUnsafeBlocks>true</AllowUnsafeBlocks><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles></PropertyGroup>
-  <ItemGroup><ProjectReference Include="..\S8.Scripting\S8.Scripting.csproj" /></ItemGroup>
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><AllowUnsafeBlocks>true</AllowUnsafeBlocks><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+    <!-- Roslyn ships beside the host for live mod sources; Korean messages only. -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies><SatelliteResourceLanguages>ko</SatelliteResourceLanguages></PropertyGroup>
+  <ItemGroup><ProjectReference Include="..\S8.Scripting\S8.Scripting.csproj" /><PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" /></ItemGroup>
+  <ItemGroup><InternalsVisibleTo Include="S8.Scripting.Smoke" /></ItemGroup>
 </Project>

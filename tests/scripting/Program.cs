@@ -68,6 +68,7 @@ unsafe class Program
         checks += EntityDataChecks.Run();
         checks += PersonalActivityChecks.Run();
         checks += BattleLifetimeChecks.Run();
+        checks += LiveSourceChecks.Run();
         string output = Path.GetFullPath(args[0]);
         nint dll = NativeLibrary.Load(Path.Combine(output, "xinput1_4.dll"));
 
