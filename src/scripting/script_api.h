@@ -2,7 +2,7 @@
 #include <cstdint>
 
 namespace s8::scripting {
-  inline constexpr std::uint32_t api_version = 19;
+  inline constexpr std::uint32_t api_version = 20;
   inline constexpr std::uint64_t ui_capability = 1, data_capability = 2, memory_capability = 4;
   enum class Status : int {
     Ready = 0,
@@ -151,7 +151,8 @@ namespace s8::scripting {
     ReadArchiveResource,
     SetJewelForceMask,
     SetTraitCatalog,
-    SetDialogTabs
+    SetDialogTabs,
+    SetRowBadge
   };
 
   // SetTraitCatalog: one record per trait ID 1..254 (index = ID - 1). The C# mod
@@ -203,6 +204,14 @@ namespace s8::scripting {
     std::uint8_t row_tabs[64]; // indexed by row action
   };
   static_assert(sizeof(DialogTabs) == 80);
+
+  // SetRowBadge: draw a form row's value as a game badge (pill image with the
+  // row text on top). Valid before or after the dialog is built; afterwards it
+  // swaps the image and text colour in place.
+  struct RowBadge {
+    int resource, width, height, palette;
+  };
+  static_assert(sizeof(RowBadge) == 16);
 
   struct TextInput {
     const wchar_t *initial;

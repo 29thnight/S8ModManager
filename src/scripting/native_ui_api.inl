@@ -347,6 +347,32 @@ std::int64_t script_engine_invoke(scripting::Operation operation, std::uint64_t 
     return 0;
   }
 
+  if (operation == Operation::SetRowBadge) {
+    if (!data || bytes != sizeof(scripting::RowBadge) || argument < 0 || argument >= 64 ||
+        (frame.page != NativeDialogStyle::Form && frame.page != NativeDialogStyle::CompactForm) ||
+        std::none_of(frame.visible.begin(), frame.visible.end(),
+                     [argument](const auto &row) { return row.action == argument; }))
+      return -1;
+    const auto badge = *static_cast<const scripting::RowBadge *>(data);
+    if (badge.resource < 1 || badge.width < 1 || badge.width > 1110 || badge.height < 1 || badge.height > 128 ||
+        badge.palette < 0 || badge.palette > 255)
+      return -1;
+    auto &current = frame.row_badges[argument];
+    if (frame.dialog) {
+      // A built row can only restyle the badge it was laid out with.
+      if (!current.resource || badge.width != current.width || badge.height != current.height)
+        return -8;
+      if (void *image = frame.row_nodes[argument][2]) {
+        using ApplyImage = void (*)(void *, int, void *, int, int, int, bool);
+        reinterpret_cast<ApplyImage>(native_ui_module + 0x1D122D0)(image, badge.resource, frame.dialog, 1, 1, 0, true);
+      }
+      if (void *text = frame.text_nodes[argument])
+        reinterpret_cast<void (*)(void *, int)>(native_ui_module + 0x1D167B0)(text, badge.palette);
+    }
+    current = badge;
+    return 0;
+  }
+
   if (operation == Operation::SetFormButtonLabel) {
     if (!data || bytes != sizeof(std::array<int, 3>) || argument < 0 || argument >= 64 ||
         (frame.page != NativeDialogStyle::Form && frame.page != NativeDialogStyle::CompactForm) ||

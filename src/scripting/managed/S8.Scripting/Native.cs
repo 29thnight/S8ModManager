@@ -131,7 +131,8 @@ internal enum Operation
     ReadArchiveResource,
     SetJewelForceMask,
     SetTraitCatalog,
-    SetDialogTabs
+    SetDialogTabs,
+    SetRowBadge
 }
 
 [StructLayout(LayoutKind.Sequential)]

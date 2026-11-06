@@ -271,6 +271,14 @@ public sealed unsafe class DialogComponent : Component
         Native.Call(Operation.SetFormButtonBounds, (ulong)Owner, action, bounds, 4 * sizeof(int));
     }
 
+    // Draws the row's value as a game badge: a pill image with the text centred on it.
+    // Call right after Show to lay it out; later calls swap the image and text colour.
+    public void SetRowBadge(int action, int resource, int width, int height, int palette)
+    {
+        int* badge = stackalloc int[] { resource, width, height, palette };
+        Native.Call(Operation.SetRowBadge, (ulong)Owner, action, badge, 4 * sizeof(int));
+    }
+
     public void SetRow(UiRow row)
     {
         fixed (char* l = row.Label, t = row.Text)

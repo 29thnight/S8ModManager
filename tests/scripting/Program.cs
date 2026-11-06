@@ -28,6 +28,7 @@ unsafe class Program
     static bool windowDirty;
     static (byte Present, int Voice, string? Name)? publishedTraits;
     static (int Owner, string[] Labels, byte[] RowTabs)? dialogTabs;
+    static (int Owner, int Action, int Resource, int Palette)? rowBadge;
     static int councilUiRequests;
     static bool councilUiAuthority = true;
     static bool councilUiComplete;
@@ -140,6 +141,9 @@ unsafe class Program
               "Detail form groups rows into basic and effect tabs");
         Check(detail.Rows.Single(r => r.Action == 10).Label == "기재 등급" &&
               !detail.Rows.Single(r => r.Action == 11).Enabled, "Grade row and disabled script effect row");
+        Check(rowBadge is { } badge && badge.Owner == detail.Owner && badge.Action == 10 &&
+              badge.Resource is >= 830 and <= 832 && badge.Palette is 0x85 or 0x8F or 0x90,
+              "Grade row drawn as the game's trait badge");
         Check(Send(ScriptEvent.TabChanged, detail.Owner, 1) == 0, "Tab change reaches the dialog");
         Check(Send(ScriptEvent.Click, detail.Owner, 2) == 0, "Effect editor dispatch");
         int effects = views[^1].Owner;
@@ -556,6 +560,11 @@ unsafe class Program
                 dialogTabs = ((int)target,
                     Enumerable.Range(0, tabCount).Select(i => new string(tabLabels[i])).ToArray(),
                     new Span<byte>((byte*)data + 16, 64).ToArray());
+                return 0;
+            case 64: // SetRowBadge: resource, width, height, palette.
+                if (bytes != 16)
+                    return -1;
+                rowBadge = ((int)target, (int)argument, ((int*)data)[0], ((int*)data)[3]);
                 return 0;
             case 23: // ReadSelection
                 selectedJewels.AsSpan().CopyTo(new Span<int>(data, (int)bytes / 4));

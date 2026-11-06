@@ -170,6 +170,7 @@ namespace s8::scripting {
       std::array<std::array<int, 4>, 64> button_bounds{};
       std::array<std::array<int, 3>, 64> button_labels{};
       std::array<std::array<int, 4>, 64> button_icons{};
+      std::array<scripting::RowBadge, 64> row_badges{}; // resource 0 = plain text
       struct RowSprite {
         std::uint32_t row, slot;
         int resource;
@@ -189,7 +190,7 @@ namespace s8::scripting {
       std::vector<std::wstring> tab_labels;
       std::vector<NativeListTab> tab_config;
       std::array<std::uint8_t, 64> row_tabs{};
-      std::array<std::array<void *, 2>, 64> row_nodes{}; // button pane, value text
+      std::array<std::array<void *, 3>, 64> row_nodes{}; // button pane, value text, badge image
       int tab = 0;
 
       std::wstring title, caption, input_initial;
@@ -930,9 +931,28 @@ namespace s8::scripting {
         if (font_size)
           create_text(label_x, label_y, session.frame().button_bounds[action][2], font_size + 8,
                       row->label.c_str(), font_size, 0);
-        if (!session.frame().hide_form_decoration && action < session.frame().text_nodes.size())
-          session.frame().text_nodes[action] = session.frame().row_nodes[action][1] = create_text(
-              text_x, y + 12, compact ? 450 : 1110, row->height > 64 ? row->height : 60, row->text.c_str(), 24, 1);
+        if (!session.frame().hide_form_decoration && action < session.frame().text_nodes.size()) {
+          const auto badge = session.frame().row_badges[action];
+          if (badge.resource) {
+            // Game badges are a pill image with the name centred on it (24px glyphs).
+            reserve_node();
+            using CreateImage = void *(*)(void *, int, int, int, int, int);
+            void *image = reinterpret_cast<CreateImage>(native_ui_module + 0x1ED5570)(
+                dialog, text_x, y + 8, badge.width, badge.height, badge.resource);
+            if (image && (native_field<std::uint32_t>(image, 0x104) & 0x40)) {
+              using ApplyImage = void (*)(void *, int, void *, int, int, int, bool);
+              reinterpret_cast<ApplyImage>(native_ui_module + 0x1D122D0)(image, badge.resource, dialog, 1, 1, 0, true);
+            }
+            session.frame().row_nodes[action][2] = image;
+            const int glyphs = static_cast<int>(row->text.size()) * 24;
+            session.frame().text_nodes[action] = session.frame().row_nodes[action][1] =
+                create_text(text_x + std::max(0, (badge.width - glyphs) / 2), y + 8 + (badge.height - 28) / 2,
+                            badge.width, 32, row->text.c_str(), 24, badge.palette);
+          } else {
+            session.frame().text_nodes[action] = session.frame().row_nodes[action][1] = create_text(
+                text_x, y + 12, compact ? 450 : 1110, row->height > 64 ? row->height : 60, row->text.c_str(), 24, 1);
+          }
+        }
 
         y += row->height;
       }

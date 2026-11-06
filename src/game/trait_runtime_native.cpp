@@ -986,7 +986,15 @@ bool apply_records(TraitRuntimeNative& state, const TraitRuntimeNative::Records&
                 source = 30;
             }
             if (source != static_cast<int>(index)) {
+                // The donor supplies the runtime body, not the trait's badge: an
+                // unset grade keeps the trait's own valid grade (1..3). Mods cannot
+                // read it themselves; the table is overwritten before it is readable.
+                std::uint16_t own_grade = 0;
+                std::memcpy(&own_grade, desired[index].data() + 0x2e, sizeof(own_grade));
                 desired[index] = desired[static_cast<std::size_t>(source)];
+                if (metadata.grade < 0 && own_grade >= 1 && own_grade <= 3) {
+                    std::memcpy(desired[index].data() + 0x2e, &own_grade, sizeof(own_grade));
+                }
             }
         }
         if (metadata.present && metadata.background_trait >= 0 &&

@@ -193,6 +193,10 @@ public sealed class TraitEditorModule : IDisposable
             ShowPendingError();
         };
         detail.Show(DialogKind.Form, "기재 편집", DetailRows(), tabs: DetailTabs);
+        // Only a row laid out as a badge can be restyled later; an unset grade stays text.
+        gradeBadge = draft.Grade is >= 1 and <= 3;
+        if (gradeBadge)
+            ShowGradeBadge();
     }
 
     private UiRow[] DetailRows()
@@ -225,6 +229,8 @@ public sealed class TraitEditorModule : IDisposable
         foreach (var row in DetailRows())
             detailLabels[row.Action].Text = row.Text;
 
+        if (gradeBadge)
+            ShowGradeBadge();
         ShowPendingError();
     }
 
@@ -306,6 +312,17 @@ public sealed class TraitEditorModule : IDisposable
         2 => "여러 무장이 가질 수 있는 긍정 기재입니다. 녹색 배지로 표시됩니다.",
         _ => "능력을 제한하는 부정 기재입니다. 적색 배지로 표시됩니다."
     };
+
+    // The game's trait badge: resource 830 + grade - 1 with that grade's text colour.
+    private const int GradeAction = 10, BadgeWidth = 130, BadgeHeight = 34;
+
+    private bool gradeBadge;
+
+    private void ShowGradeBadge()
+    {
+        int grade = draft!.Grade;
+        detail.SetRowBadge(GradeAction, 829 + grade, BadgeWidth, BadgeHeight, grade switch { 1 => 0x85, 2 => 0x8F, _ => 0x90 });
+    }
 
     private void SelectGrade()
     {
