@@ -101,8 +101,8 @@ unsafe class Program
         managedDispatch = &S8.Scripting.Host.Entry.Dispatch;
         File.WriteAllText(Path.Combine(game, "S8RPK_traits_default.json"), """{"version":2,"traits":[{"id":1,"index":0,"effects":[]}],"customNames":{}}""");
         // Generated test directory only. Do not share this path with a game install.
-        string config = Path.Combine(game, "san8r_traits_config.json");
-        string forcedFile = Path.Combine(game, "S8.Editors.jewels.json");
+        string config = Path.Combine(mod, "san8r_traits_config.json");
+        string forcedFile = Path.Combine(mod, "S8.Editors.jewels.json");
 
         if (File.Exists(forcedFile))
             File.Delete(forcedFile);

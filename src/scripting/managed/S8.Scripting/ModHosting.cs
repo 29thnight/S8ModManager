@@ -57,7 +57,7 @@ public static unsafe class AotModHost<TModule> where TModule : IScriptModule, ne
         if (modDirectory == null || gameDirectory == null || context != null)
             return (int)ConnectionStatus.InvalidApi;
 
-        context = new ModContext(new string(gameDirectory), Path.Combine(new string(modDirectory), "assets"));
+        context = new ModContext(new string(gameDirectory), new string(modDirectory));
         return 0;
     }
 

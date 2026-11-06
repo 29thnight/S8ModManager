@@ -21,7 +21,7 @@ public sealed class ModApplication : ScriptMod
             ScriptedTraitCatalog.RecoveryEffect,
             "턴 종료 부상병 전량 회복",
             "보유 장수의 소속 부대를 게임의 회복 상한까지 회복합니다."));
-        scriptedTraits = new ScriptedTraitCatalog(Context.GameDirectory, effects, World);
+        scriptedTraits = new ScriptedTraitCatalog(Context, effects, World);
         traits.ScriptedTraits = scriptedTraits;
 #endif
         traits.Initialize(Context);

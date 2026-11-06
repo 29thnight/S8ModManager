@@ -34,7 +34,7 @@ public sealed class JewelEditorModule : IDisposable
             throw new InvalidDataException("The jewel catalog contains invalid or duplicate identifiers.");
 
         // The forced-effect mask is mod state; the game save only keeps the opened bitmap.
-        forcedPath = Path.Combine(context.GameDirectory, "S8.Editors.jewels.json");
+        forcedPath = Path.Combine(context.ModDirectory, "S8.Editors.jewels.json");
         if (File.Exists(forcedPath))
         {
             using var saved = JsonDocument.Parse(File.ReadAllBytes(forcedPath));

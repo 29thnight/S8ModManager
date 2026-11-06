@@ -63,11 +63,18 @@ public sealed class TraitEditorModule : IDisposable
         }
     }
 
+    // The first save is seeded from the game's default trait table (read only).
+    public static string DefaultTraitsPath(ModContext context)
+    {
+        string own = Path.Combine(context.ModDirectory, "S8RPK_traits_default.json");
+        return File.Exists(own) ? own : Path.Combine(context.GameDirectory, "S8RPK_traits_default.json");
+    }
+
     public void Open()
     {
         Dispose();
         scene = new UiScene();
-        store = new Store(context.GameDirectory);
+        store = new Store(context);
 #if S8_EXPERIMENTAL
         ScriptedTraits.Reload();
 #endif
@@ -442,11 +449,11 @@ public sealed class TraitEditorModule : IDisposable
         private string? baseline;
         private JsonObject root;
 
-        public Store(string directory)
+        public Store(ModContext context)
         {
-            path = Path.Combine(directory, "san8r_traits_config.json");
+            path = Path.Combine(context.ModDirectory, "san8r_traits_config.json");
             baseline = File.Exists(path) ? File.ReadAllText(path) : null;
-            string initial = baseline ?? File.ReadAllText(Path.Combine(directory, "S8RPK_traits_default.json"));
+            string initial = baseline ?? File.ReadAllText(TraitEditorModule.DefaultTraitsPath(context));
 
             root = JsonNode.Parse(initial)!.AsObject();
 

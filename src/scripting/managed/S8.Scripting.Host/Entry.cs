@@ -81,7 +81,7 @@ public static unsafe class Entry
 
             var replacement = (IScriptModule)Activator.CreateInstance(loaded.GetType(type, throwOnError: true)!)!;
 
-            replacement.Initialize(new ModContext(gameDirectory, Path.Combine(modDirectory, "assets")));
+            replacement.Initialize(new ModContext(gameDirectory, modDirectory));
             module?.Dispose();
             context?.Unload();
             context = next;

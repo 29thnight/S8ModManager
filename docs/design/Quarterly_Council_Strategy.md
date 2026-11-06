@@ -74,7 +74,7 @@ strategy.SetCityOrder(cityId,
 대기열 지연과 요청 생성 이후 소유권 변경은 후속 설계/시험 대상이다.
 
 실행 기록: `C:\Users\lance\Documents\SAN8RPK-analysis-20261104\council-strategy-results-20261105.log`.
-`scripts/council-strategy.trace` 파일이 있을 때만 진단 로그를 연결한다.
+모드 폴더(`scripts/mods/<폴더>/`)에 `council-strategy.trace` 파일이 있을 때만 진단 로그를 연결한다.
 
 ## 후속 수정: 대기열 처리와 소유권 변경
 

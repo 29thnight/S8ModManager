@@ -13,7 +13,7 @@ public sealed class CouncilStrategySetup : WorldSetup
         world.Events.Attach(new CouncilStrategyMenuEvent(strategy));
         world.Events.Attach(new CouncilStrategyMenuEvent(strategy, inCouncilRoom: true));
 
-        string directory = Path.Combine(world.Application!.Context.GameDirectory, "scripts");
+        string directory = world.Application!.Context.ModDirectory;
         if (!File.Exists(Path.Combine(directory, "council-strategy.trace")))
             return;
 

@@ -77,7 +77,12 @@ public abstract class Component
     }
 }
 
-public sealed record ModContext(string GameDirectory, string AssetDirectory);
+// ModDirectory is the mod's own folder: read assets from AssetDirectory and keep
+// every file the mod writes under ModDirectory. GameDirectory is for reading only.
+public sealed record ModContext(string GameDirectory, string ModDirectory)
+{
+    public string AssetDirectory => Path.Combine(ModDirectory, "assets");
+}
 public interface IScriptModule : IDisposable
 {
     bool CanReload => true;

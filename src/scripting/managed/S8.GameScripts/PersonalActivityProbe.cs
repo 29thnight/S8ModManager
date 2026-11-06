@@ -7,7 +7,7 @@ public sealed class PersonalActivityProbeSetup : WorldSetup
 {
     public override void Configure(GameWorld world)
     {
-        string directory = Path.Combine(world.Application!.Context.GameDirectory, "scripts");
+        string directory = world.Application!.Context.ModDirectory;
 
         if (File.Exists(Path.Combine(directory, "lifecycle-probe.enabled")))
             world.GetPlayer().Character.AddComponent<PersonalActivityProbe>(

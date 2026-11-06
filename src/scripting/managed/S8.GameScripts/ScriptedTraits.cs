@@ -8,6 +8,7 @@ public sealed class ScriptedTraitCatalog : IDisposable
 {
     public const string RecoveryEffect = "s8.battle.wounded-recovery";
 
+    private readonly ModContext context;
     private readonly string directory;
     private readonly string bindingsPath;
     private readonly ScriptEffectRegistry registry;
@@ -19,11 +20,12 @@ public sealed class ScriptedTraitCatalog : IDisposable
 
     public GameWorld World => Battle.World;
 
-    public ScriptedTraitCatalog(string gameDirectory, ScriptEffectRegistry effects, GameWorld world)
+    public ScriptedTraitCatalog(ModContext context, ScriptEffectRegistry effects, GameWorld world)
     {
         Battle = new BattleWorld(world);
         world.SessionEnded += OnSessionEnded;
-        directory = gameDirectory;
+        this.context = context;
+        directory = context.ModDirectory;
         bindingsPath = Path.Combine(directory, "san8r_script_traits.json");
         registry = effects;
         Reload();
@@ -127,7 +129,7 @@ public sealed class ScriptedTraitCatalog : IDisposable
     {
         Reload();
         string path = Path.Combine(directory, "san8r_traits_config.json");
-        string original = File.ReadAllText(File.Exists(path) ? path : Path.Combine(directory, "S8RPK_traits_default.json"));
+        string original = File.ReadAllText(File.Exists(path) ? path : TraitEditorModule.DefaultTraitsPath(context));
         var root = JsonNode.Parse(original)!.AsObject();
         var traits = root["traits"]!.AsArray();
         var names = root["customNames"] as JsonObject ?? new JsonObject();
