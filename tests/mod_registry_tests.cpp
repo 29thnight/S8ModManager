@@ -61,6 +61,12 @@ void mod_selection() {
   assert(!parse_mod_manifest(R"({"id":"a","version":"1.0.0","runtime":"aot","entry":"a.dll","dependencies":{"core":"1.0"}})", L"m"));
   assert(!parse_mod_manifest(R"({"id":"a","version":"1.0.0","runtime":"aot","entry":"a.dll","conflicts":"b"})", L"m"));
   assert(!parse_mod_manifest(R"({"id":"a","version":"1.0.0","runtime":"aot","entry":"a.dll","apiVersion":0})", L"m"));
+  // gameBuild: the executable build stamp as hex; omitted means any build.
+  const auto built = parse_mod_manifest(R"({"id":"a","version":"1.0.0","runtime":"aot","entry":"a.dll","gameBuild":"69A67ED1"})", L"m");
+  assert(built && built->game_build == 0x69A67ED1 && declared->game_build == 0);
+  assert(!parse_mod_manifest(R"({"id":"a","version":"1.0.0","runtime":"aot","entry":"a.dll","gameBuild":"xyz"})", L"m"));
+  assert(!parse_mod_manifest(R"({"id":"a","version":"1.0.0","runtime":"aot","entry":"a.dll","gameBuild":1})", L"m"));
+  assert(!parse_mod_manifest(R"({"id":"a","version":"1.0.0","runtime":"aot","entry":"a.dll","gameBuild":"169A67ED1"})", L"m"));
 }
 
 namespace {

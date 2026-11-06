@@ -46,6 +46,18 @@ public static unsafe class Entry
         return ModDispatch.Run(api, () => slot.Resolve(kind), kind, owner, value);
     }
 
+    // The manager switched the mod off: stop it now. The slot stays registered and
+    // the next load event loads the mod again if it is switched back on.
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    public static int Unload(NativeApi* api, int handle)
+    {
+        if (handle < 0 || handle >= slots.Count)
+            return (int)ConnectionStatus.InvalidApi;
+
+        var slot = slots[handle];
+        return ModDispatch.Run(api, slot.Unload);
+    }
+
     private sealed class ModSlot(string id, string modDirectory, string gameDirectory, string assembly, string type)
     {
         private AssemblyLoadContext? context;
@@ -56,6 +68,29 @@ public static unsafe class Entry
         private bool swapPending;
 
         public string Id { get; } = id;
+
+        public void Unload()
+        {
+            var stopped = module;
+            var stoppedContext = context;
+            module = null;
+            context = null;
+            loadedAssembly = null;
+            loadedIdentity = null;
+            live = null;
+            swapPending = false;
+            if (stopped == null)
+                return;
+            try
+            {
+                stopped.Disable();
+            }
+            finally
+            {
+                stopped.Dispose();
+                stoppedContext?.Unload();
+            }
+        }
 
         // Live coding: with a source\ folder, edited method bodies apply in place on
         // the next event (hot reload). Otherwise, or for structural edits, a rebuilt

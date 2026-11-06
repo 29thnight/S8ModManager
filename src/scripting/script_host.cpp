@@ -5,6 +5,9 @@
 #define NOMINMAX
 
 #include <Windows.h>
+#include <algorithm>
+#include <cstring>
+#include <utility>
 #include <coreclr_delegates.h>
 #include <filesystem>
 #include <fstream>
@@ -22,10 +25,19 @@ namespace {
   using namespace s8::scripting;
   thread_local const EngineApi *current = nullptr;
 
+  bool save_state(const std::filesystem::path &path, const ModState &state);
+  std::int64_t read_mod_list(void *data, std::uint32_t bytes);
+  std::int64_t set_mod_enabled(std::int64_t argument, const void *data, std::uint32_t bytes);
+
   std::int64_t invoke(Operation operation, std::uint64_t target, std::int64_t argument, void *data,
                       std::uint32_t bytes) {
     if (!current)
       return -1;
+
+    if (operation == Operation::ReadModList)
+      return read_mod_list(data, bytes);
+    if (operation == Operation::SetModEnabled)
+      return set_mod_enabled(argument, data, bytes);
 
     if ((operation >= Operation::GetPersonality && operation <= Operation::WriteMemory) ||
         operation == Operation::GetGemCategory) {
@@ -44,21 +56,41 @@ namespace {
   using ManagedRegister = int(CORECLR_DELEGATE_CALLTYPE *)(const wchar_t *, const wchar_t *, const wchar_t *,
                                                            const wchar_t *, const wchar_t *);
   using ManagedDispatch = int(CORECLR_DELEGATE_CALLTYPE *)(const EngineApi *, int, int, int, int);
+  using ManagedUnload = int(CORECLR_DELEGATE_CALLTYPE *)(const EngineApi *, int);
   using AotLoad = int (*)(const wchar_t *, const wchar_t *);
   using AotDispatch = int (*)(const EngineApi *, int, int, int);
+  using AotUnload = int (*)(const EngineApi *);
 
+  // A mod switched off during the run keeps its slot (JIT handle or AOT library)
+  // and only stops receiving events; switching it back on reuses the slot, and
+  // the next load event initializes it again.
   struct LoadedMod {
     ModManifest manifest;
     int handle = -1;
     AotDispatch aot = nullptr;
+    AotUnload aot_unload = nullptr;
+    bool active = true;
+  };
+
+  // What the options screen reports: every mod found this run and what became of it.
+  struct ModListing {
+    ModManifest manifest;
+    bool enabled = true;
+    const wchar_t *state = L"loaded";
+    std::wstring reason;
   };
 
   struct ModHost {
     bool loaded = false;
     std::filesystem::path base;
     std::vector<LoadedMod> mods;
+    std::vector<ModListing> listing;
+    std::vector<ModManifest> found;
+    bool reselect = false; // mods.json changed during a callback; applied once delivery ends
+    bool changed = false;  // the selection changed; the UI sends a load event for new mods
     ManagedRegister managed_register = nullptr;
     ManagedDispatch managed_dispatch = nullptr;
+    ManagedUnload managed_unload = nullptr;
   } host;
 
   void log(const std::wstring &message) {
@@ -127,7 +159,9 @@ namespace {
                 reinterpret_cast<void **>(&host.managed_register)) == 0 &&
            load(assembly.c_str(), type, L"Dispatch", UNMANAGEDCALLERSONLY_METHOD, nullptr,
                 reinterpret_cast<void **>(&host.managed_dispatch)) == 0 &&
-           host.managed_register && host.managed_dispatch;
+           load(assembly.c_str(), type, L"Unload", UNMANAGEDCALLERSONLY_METHOD, nullptr,
+                reinterpret_cast<void **>(&host.managed_unload)) == 0 &&
+           host.managed_register && host.managed_dispatch && host.managed_unload;
   }
 
   std::vector<ModManifest> scan_mods(const std::filesystem::path &root) {
@@ -168,6 +202,7 @@ namespace {
 
     const auto load = reinterpret_cast<AotLoad>(GetProcAddress(library, "S8ModLoad"));
     mod.aot = reinterpret_cast<AotDispatch>(GetProcAddress(library, "S8ModDispatch"));
+    mod.aot_unload = reinterpret_cast<AotUnload>(GetProcAddress(library, "S8ModUnload")); // optional
 
     if (!load || !mod.aot || load(mod.manifest.directory.c_str(), host.base.c_str()) != 0) {
       mod.aot = nullptr;
@@ -208,36 +243,196 @@ namespace {
     }
 
     auto merged = merge_mod_state(state, found);
-    if (!exists || merged != state) {
-      const auto temporary = path.wstring() + L".tmp";
-      std::ofstream(temporary, std::ios::binary | std::ios::trunc) << write_mod_state(merged);
-      std::filesystem::rename(temporary, path, error);
-      if (error)
-        log(path.wstring() + L": 상태 파일을 저장하지 못했습니다.");
-    }
+    if (!exists || merged != state)
+      save_state(path, merged);
     return merged;
+  }
+
+  std::filesystem::path state_path() {
+    return host.base / L"scripts" / L"mods.json";
+  }
+
+  bool save_state(const std::filesystem::path &path, const ModState &state) {
+    std::error_code error;
+    const auto temporary = path.wstring() + L".tmp";
+    std::ofstream(temporary, std::ios::binary | std::ios::trunc) << write_mod_state(state);
+    std::filesystem::rename(temporary, path, error);
+    if (error)
+      log(path.wstring() + L": 상태 파일을 저장하지 못했습니다.");
+    return !error;
+  }
+
+  std::wstring version_text(const ModVersion &version) {
+    return std::to_wstring(version.major) + L"." + std::to_wstring(version.minor) + L"." +
+           std::to_wstring(version.patch);
+  }
+
+  std::wstring hex(std::uint32_t value) {
+    wchar_t text[16]{};
+    if (value)
+      swprintf_s(text, L"%08X", value);
+    return text;
+  }
+
+  // Tabs and line breaks separate fields and records, so they never appear inside one.
+  std::wstring field(std::wstring text) {
+    std::ranges::replace(text, L'\t', L' ');
+    std::ranges::replace(text, L'\n', L' ');
+    std::ranges::replace(text, L'\r', L' ');
+    return text;
+  }
+
+  std::wstring widen_id(const std::string &id) {
+    return std::filesystem::path(std::u8string(id.begin(), id.end())).wstring();
+  }
+
+  std::int64_t read_mod_list(void *data, std::uint32_t bytes) {
+    std::wstring text = std::to_wstring(api_version) + L"\t" + hex(game_connection().game_build) + L"\n";
+    for (const auto &item : host.listing) {
+      const auto &mod = item.manifest;
+      std::wstring dependencies, conflicts;
+      for (const auto &dependency : mod.dependencies)
+        dependencies += (dependencies.empty() ? L"" : L",") + widen_id(dependency.id) + L">=" +
+                        version_text(dependency.minimum);
+      for (const auto &conflict : mod.conflicts)
+        conflicts += (conflicts.empty() ? L"" : L",") + widen_id(conflict);
+      text += field(widen_id(mod.id)) + L"\t" + field(mod.name) + L"\t" + version_text(mod.version) + L"\t" +
+              (mod.runtime == ModRuntime::Aot ? L"aot" : L"jit") + L"\t" + (item.enabled ? L"1" : L"0") + L"\t" +
+              item.state + L"\t" + field(item.reason) + L"\t" + std::to_wstring(mod.api) + L"\t" +
+              hex(mod.game_build) + L"\t" + dependencies + L"\t" + conflicts + L"\n";
+    }
+    // The caller learns the length first and retries with room for all of it.
+    if (data && bytes >= text.size() * sizeof(wchar_t))
+      std::memcpy(data, text.data(), text.size() * sizeof(wchar_t));
+    return static_cast<std::int64_t>(text.size());
+  }
+
+  std::int64_t set_mod_enabled(std::int64_t argument, const void *data, std::uint32_t bytes) {
+    if (!data || bytes == 0 || bytes > 256 || bytes % sizeof(wchar_t) != 0 || (argument != 0 && argument != 1))
+      return -1;
+    const std::wstring wide(static_cast<const wchar_t *>(data), bytes / sizeof(wchar_t));
+    const auto narrow = std::filesystem::path(wide).u8string();
+    const std::string id(narrow.begin(), narrow.end());
+    if (std::ranges::none_of(host.listing, [&](const ModListing &item) { return item.manifest.id == id; }))
+      return -1;
+
+    ModState state;
+    const auto path = state_path();
+    {
+      std::ifstream file(path, std::ios::binary);
+      std::ostringstream content;
+      content << file.rdbuf();
+      auto parsed = parse_mod_state(content.str());
+      if (!parsed) {
+        log(path.wstring() + L": " + parsed.error() + L" 고쳐 쓰지 않습니다.");
+        return -1;
+      }
+      state = std::move(*parsed);
+    }
+    const auto entry = std::ranges::find(state.mods, id, &ModStateEntry::id);
+    if (entry == state.mods.end())
+      state.mods.push_back({id, argument == 1});
+    else
+      entry->enabled = argument == 1;
+    if (!save_state(path, state))
+      return -1;
+    for (auto &item : host.listing)
+      if (item.manifest.id == id)
+        item.enabled = argument == 1;
+    host.reselect = true;
+    return 0;
+  }
+
+  bool same_mod(const ModManifest &left, const ModManifest &right) {
+    return left.id == right.id && left.directory == right.directory;
+  }
+
+  // Stops a mod: it releases its registrations and undoes its own changes. An AOT
+  // library without S8ModUnload cannot be stopped and keeps running this session.
+  bool unload(LoadedMod &mod, const EngineApi *api) {
+    if (mod.aot ? !mod.aot_unload : mod.handle < 0)
+      return false;
+    const int status = mod.aot ? mod.aot_unload(api) : host.managed_unload(api, mod.handle);
+    if (status != 0)
+      log(mod.manifest.directory.wstring() + L": 모드를 내리는 중 오류가 있었습니다.");
+    mod.active = false;
+    return true;
+  }
+
+  // Applies a selection to the running mods: mods that left it are stopped, the
+  // rest run in its order, and new ones are loaded (or their kept slot reused).
+  void apply_selection(const ModState &state, const EngineApi *api) {
+    auto selection = select_mods(host.found, state, api_version);
+    const auto enabled = [&](const std::string &id) {
+      const auto entry = std::ranges::find(state.mods, id, &ModStateEntry::id);
+      return entry == state.mods.end() || entry->enabled;
+    };
+    const auto selected = [&](const ModManifest &manifest) {
+      return std::ranges::any_of(selection.active, [&](const auto &other) { return same_mod(manifest, other); });
+    };
+
+    host.listing.clear();
+    for (const auto &skipped : selection.skipped) {
+      log(skipped.manifest.directory.wstring() + L": " + skipped.reason);
+      ModListing listing{skipped.manifest, enabled(skipped.manifest.id), L"skipped", skipped.reason};
+      const auto running = std::ranges::find_if(host.mods, [&](const LoadedMod &mod) {
+        return mod.active && same_mod(mod.manifest, skipped.manifest);
+      });
+      if (running != host.mods.end() && !unload(*running, api)) {
+        listing.state = L"loaded";
+        listing.reason = L"이 AOT 모드는 내릴 수 없어 다음 실행부터 빠집니다.";
+      }
+      host.listing.push_back(std::move(listing));
+    }
+
+    std::vector<LoadedMod> ordered;
+    for (auto &manifest : selection.active) {
+      ModListing listing{manifest, true};
+      const auto kept = std::ranges::find_if(host.mods, [&](const LoadedMod &mod) { return same_mod(mod.manifest, manifest); });
+      if (kept != host.mods.end()) {
+        kept->active = true;
+        ordered.push_back(std::move(*kept));
+        host.mods.erase(kept);
+      } else {
+        LoadedMod mod{manifest};
+        if (mod.manifest.runtime == ModRuntime::Aot ? load_aot(mod) : load_jit(mod)) {
+          ordered.push_back(std::move(mod));
+        } else {
+          log(manifest.directory.wstring() + L": 모드를 불러오지 못했습니다.");
+          listing.state = L"failed";
+          listing.reason = L"모드를 불러오지 못했습니다.";
+        }
+      }
+      host.listing.push_back(std::move(listing));
+    }
+    // Stopped mods (and AOT mods that could not stop) keep their slots after the selection.
+    for (auto &mod : host.mods)
+      if (!selected(mod.manifest))
+        ordered.push_back(std::move(mod));
+    host.mods = std::move(ordered);
+  }
+
+  void reselect_mods(const EngineApi *api) {
+    host.reselect = false;
+    const auto path = state_path();
+    std::ifstream file(path, std::ios::binary);
+    std::ostringstream content;
+    content << file.rdbuf();
+    auto state = parse_mod_state(content.str());
+    if (!state) {
+      log(path.wstring() + L": " + state.error() + L" 모드 구성을 바꾸지 않습니다.");
+      return;
+    }
+    apply_selection(*state, api);
+    host.changed = true;
   }
 
   void load_mods() {
     host.loaded = true;
     host.base = module_directory();
 
-    auto found = scan_mods(host.base / L"scripts" / L"mods");
-    const auto state = load_state(host.base / L"scripts" / L"mods.json", found);
-    auto selection = select_mods(std::move(found), state, api_version);
-
-    for (const auto &skipped : selection.skipped)
-      log(skipped.manifest.directory.wstring() + L": " + skipped.reason);
-
-    for (auto &manifest : selection.active) {
-      LoadedMod mod{std::move(manifest)};
-      const bool loaded = mod.manifest.runtime == ModRuntime::Aot ? load_aot(mod) : load_jit(mod);
-
-      if (loaded)
-        host.mods.push_back(std::move(mod));
-      else
-        log(mod.manifest.directory.wstring() + L": 모드를 불러오지 못했습니다.");
-    }
+    host.found = scan_mods(host.base / L"scripts" / L"mods");
+    apply_selection(load_state(state_path(), host.found), nullptr);
   }
 } // namespace
 
@@ -275,12 +470,25 @@ extern "C" __declspec(dllexport) int S8ScriptDispatch(const s8::scripting::Engin
 
   int result = 0;
   for (const auto &mod : host.mods) {
+    if (!mod.active)
+      continue;
     const int status = mod.aot ? mod.aot(&facade, static_cast<int>(event), page, action)
                                : host.managed_dispatch(&facade, mod.handle, static_cast<int>(event), page, action);
     if (result == 0)
       result = status;
   }
 
+  // A mod switched on or off in a callback takes effect once every mod has had
+  // the event; the list is not changed while it is being walked.
+  if (!previous && host.reselect)
+    reselect_mods(&facade);
+
   current = previous;
   return result;
 }
+
+namespace s8::scripting {
+  bool take_mod_selection_change() {
+    return std::exchange(host.changed, false);
+  }
+} // namespace s8::scripting

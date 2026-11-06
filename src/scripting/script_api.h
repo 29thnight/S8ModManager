@@ -2,7 +2,7 @@
 #include <cstdint>
 
 namespace s8::scripting {
-  inline constexpr std::uint32_t api_version = 20;
+  inline constexpr std::uint32_t api_version = 21;
   inline constexpr std::uint64_t ui_capability = 1, data_capability = 2, memory_capability = 4;
   enum class Status : int {
     Ready = 0,
@@ -85,7 +85,8 @@ namespace s8::scripting {
     MonthChanged,
     CouncilEntered,
     CouncilRoomReady,
-    TabChanged
+    TabChanged,
+    OptionChanged
   };
   enum class Operation : int {
     ShowDialog,
@@ -152,7 +153,10 @@ namespace s8::scripting {
     SetJewelForceMask,
     SetTraitCatalog,
     SetDialogTabs,
-    SetRowBadge
+    SetRowBadge,
+    SetOptionsTab,
+    ReadModList,
+    SetModEnabled
   };
 
   // SetTraitCatalog: one record per trait ID 1..254 (index = ID - 1). The C# mod
@@ -212,6 +216,34 @@ namespace s8::scripting {
     int resource, width, height, palette;
   };
   static_assert(sizeof(RowBadge) == 16);
+
+  // SetOptionsTab: one extra tab on the title screen's options (환경설정). Each row
+  // is a game choice row (◀ value ▶); hovering it shows its description in the
+  // game's description panel. A changed choice raises Event::OptionChanged with
+  // owner = the registration owner and value = (row action << 16) | choice index.
+  struct OptionRow {
+    int action, current;
+    const wchar_t *label;
+    const wchar_t *description;
+    const wchar_t *const *choices;
+    int choice_count, reserved;
+  };
+  static_assert(sizeof(OptionRow) == 40);
+
+  struct OptionsTab {
+    int owner, count;
+    const wchar_t *label;
+    const OptionRow *rows;
+  };
+  static_assert(sizeof(OptionsTab) == 24);
+
+  // ReadModList: every mod the manager found this run, one per line, fields split
+  // by tabs: id, name, version, runtime (jit/aot), enabled in mods.json (0/1),
+  // state (loaded/skipped/failed), reason, required API (0 = any), game build
+  // (hex, empty = any), dependencies (id>=x.y.z, comma separated), conflicts.
+  // The first line is: host API, current game build (hex).
+  // SetModEnabled: data = mod id (UTF-16), argument = 0/1; written to mods.json and
+  // applied on the next start.
 
   struct TextInput {
     const wchar_t *initial;

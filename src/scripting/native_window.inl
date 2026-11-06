@@ -119,6 +119,7 @@ void bind_native_window_row(void *window, WindowBinding &binding, const WindowRe
     active_window = &binding;
     native_ui_active.store(true, std::memory_order_release);
     dispatch_mod_event(Event::WindowClick, binding.id, action);
+    active_window = nullptr;
     if (native_ui_session.frames.empty())
       native_ui_active.store(false, std::memory_order_release);
   };

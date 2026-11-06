@@ -63,7 +63,8 @@ public enum ScriptEvent
     MonthChanged,
     CouncilEntered,
     CouncilRoomReady,
-    TabChanged
+    TabChanged,
+    OptionChanged
 }
 
 internal enum Operation
@@ -132,7 +133,10 @@ internal enum Operation
     SetJewelForceMask,
     SetTraitCatalog,
     SetDialogTabs,
-    SetRowBadge
+    SetRowBadge,
+    SetOptionsTab,
+    ReadModList,
+    SetModEnabled
 }
 
 [StructLayout(LayoutKind.Sequential)]

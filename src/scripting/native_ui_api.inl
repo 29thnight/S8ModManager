@@ -294,9 +294,12 @@ std::int64_t script_engine_invoke(scripting::Operation operation, std::uint64_t 
       if (std::any_of(session.frames.begin(), session.frames.end(),
                       [](const auto &frame) { return frame->page == NativeDialogStyle::GemTree; }))
         return -8;
+      void *parent_window = native_tree_view.parent_window;
       native_tree_view = {};
-      suspend_native_window();
+      native_tree_view.parent_window = parent_window;
     }
+    if (session.frames.empty())
+      suspend_native_window();
     show_native_dialog(styles[static_cast<int>(spec.kind)], spec);
     return 0;
   }

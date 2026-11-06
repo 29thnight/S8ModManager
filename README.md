@@ -17,6 +17,8 @@
 
 ## 모드
 
+모드를 만드는 방법과 쓸 수 있는 기능은 [모드 제작 안내](docs/Mod_Authoring.md)에 있습니다.
+
 - 모드는 `scripts\mods\<폴더>\mod.json`으로 선언합니다. `runtime`은 `jit` 또는 `aot`입니다.
 - 같은 `id`의 모드가 여러 개면 하나만 적용합니다. 버전이 높은 쪽, 버전이 같으면 JIT 쪽입니다.
 - 선택 항목: `apiVersion`(요구 엔진 API 버전, 다르면 건너뜀), `dependencies`(`{"모드 id": "최소 버전"}`), `conflicts`(같이 켤 수 없는 모드 id 배열).

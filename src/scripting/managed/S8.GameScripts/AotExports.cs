@@ -15,5 +15,8 @@ public static unsafe class AotExports
     [UnmanagedCallersOnly(EntryPoint = "S8ModDispatch")]
     public static int Dispatch(NativeApi* api, int kind, int owner, int value) =>
         AotModHost<ModApplication>.Dispatch(api, kind, owner, value);
+
+    [UnmanagedCallersOnly(EntryPoint = "S8ModUnload")]
+    public static int Unload(NativeApi* api) => AotModHost<ModApplication>.Unload(api);
 }
 #endif

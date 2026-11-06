@@ -25,7 +25,7 @@ Component에는 현재 OnEnable/OnDisable만 있다. Awake, Start, 매 프레임
 | --- | --- | --- | --- |
 | IMonthChangedHandler.OnMonthChanged | 월 진행 원본 함수 반환 후 날짜 변경 확인. 다음 화면 준비 전 | 이미 월드에 생성된 모든 장수·도시 객체 | 세션 ID, 이전·현재 연월 |
 | ICouncilEnteredHandler.OnCouncilEntered | 진입 연출 종료 후 평정 명령 상태로 전환 완료 | 이미 월드에 생성된 모든 장수·도시 객체 | 세션 ID, 연월 |
-| IDomesticActivityCompletedHandler.OnDomesticActivityCompleted | 보수 실행·대화·수치 연출 후 도시 명령 상태 복귀 | 실행 장수 객체 | 세션 ID, 장수, GateRepair |
+| IDomesticActivityCompletedHandler.OnDomesticActivityCompleted | 보수 실행·대화·수치 연출 후 도시 명령 상태 복귀 | 실행 장수 객체 | 세션 ID, 장수, 활동 종류(개간·상업·보수·치안·기술) |
 | ITalkCompletedHandler.OnTalkCompleted | 담화 및 도중 발생한 이벤트 종료 후 교류 명령 상태 복귀 | 실행 장수와 상대 장수 객체. 같은 객체면 한 번 | 세션 ID, 실행 장수, 상대 장수 |
 
 순서는 해당 컴포넌트 핸들러 → GameWorld의 동명 이벤트 → WorldEvent 트리거 발행이다. 월변경·평정 진입은 호출 시작 시 대상 목록을 만든다. 그 호출 중 새로 붙인 컴포넌트는 다음 호출부터 받는다.
@@ -37,7 +37,7 @@ Component에는 현재 OnEnable/OnDisable만 있다. Awake, Start, 매 프레임
 | DomesticActivityCompleted | DomesticActivityCompleted | domestic.activity.completed |
 | TalkCompleted | TalkCompleted | communicate.talk.completed |
 
-월변경은 192년7→8→9→10월 날짜 전달과 인스턴스 유지, 휴양 취소 시 미발행을 실행 확인했다. 평정 진입은 포상·시작 대사 뒤 명령 화면 진입 1회, 메뉴 복귀 시 중복 없음까지 확인했다. 특수 kind0x3C 전환과 평정 세이브 직접 로드는 미검증이다. 내정 완료는 현재 GateRepair만 연결했다.
+월변경은 192년7→8→9→10월 날짜 전달과 인스턴스 유지, 휴양 취소 시 미발행을 실행 확인했다. 평정 진입은 포상·시작 대사 뒤 명령 화면 진입 1회, 메뉴 복귀 시 중복 없음까지 확인했다. 특수 kind0x3C 전환과 평정 세이브 직접 로드는 미검증이다. 내정 완료는 개간(1)·상업(11)·보수(21)·치안(31)·기술(41) 다섯 활동을 연결했다. 2026-11-07 실측에서 다섯 모두 같은 내정 상태 함수를 지나 도시 명령 상태로 돌아왔고, 확인창 취소는 사건을 내지 않았으며, 다른 무장의 내정은 이 상태를 지나지 않았다.
 
 ## 컴포넌트 작성 예
 

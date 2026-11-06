@@ -1,7 +1,7 @@
 namespace S8.Scripting;
 
 // The C ABI guard shared by the JIT host and AOT mod exports.
-public static unsafe class ModDispatch
+public static unsafe partial class ModDispatch
 {
     public static bool IsLoadEvent(int kind) => (ScriptEvent)kind is ScriptEvent.Open or ScriptEvent.Configure;
 
@@ -45,6 +45,32 @@ public static unsafe class ModDispatch
     }
 }
 
+public static unsafe partial class ModDispatch
+{
+    // Runs a host action (such as stopping a module) with the engine API entered.
+    public static int Run(NativeApi* api, Action action)
+    {
+        if (api == null)
+            return (int)ConnectionStatus.InvalidApi;
+
+        nint previous = Native.Enter(api);
+        try
+        {
+            action();
+            return 0;
+        }
+        catch (Exception error)
+        {
+            System.Diagnostics.Trace.WriteLine(error);
+            return error is EngineCallException binding ? (int)binding.Status : (int)ConnectionStatus.ScriptFailure;
+        }
+        finally
+        {
+            Native.Leave(previous);
+        }
+    }
+}
+
 // Backing state for a NativeAOT mod. The mod exports S8ModLoad and S8ModDispatch
 // and forwards them here; the manager calls S8ModLoad once before any event.
 public static unsafe class AotModHost<TModule> where TModule : IScriptModule, new()
@@ -73,4 +99,22 @@ public static unsafe class AotModHost<TModule> where TModule : IScriptModule, ne
 
             return module;
         }, kind, owner, value);
+
+    // Switched off by the manager: the next load event creates the module again.
+    public static int Unload(NativeApi* api) =>
+        ModDispatch.Run(api, () =>
+        {
+            var stopped = module;
+            module = default;
+            if (stopped == null)
+                return;
+            try
+            {
+                stopped.Disable();
+            }
+            finally
+            {
+                stopped.Dispose();
+            }
+        });
 }

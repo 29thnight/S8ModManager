@@ -28,6 +28,7 @@
 #include <Windows.h>
 #include <bcrypt.h>
 #include <CommCtrl.h>
+#include <intrin.h>
 
 #pragma comment(lib, "Comctl32.lib")
 
@@ -1019,6 +1020,8 @@ namespace s8::scripting {
                                                 0x16913E0)(*reinterpret_cast<void **>(native_ui_module + 0x350A4C0), 0);
         reinterpret_cast<void (*)(void *)>(native_ui_module + 0x183B0E0)(frame.tree_state.data());
         native_tree_view.layout = nullptr;
+      }
+      if (session.frames.size() == 1) {
         void *parent = native_tree_view.parent_window;
         native_tree_view.parent_window = nullptr;
         if (parent) {
@@ -1304,6 +1307,7 @@ std::optional<std::int64_t> invoke_battle_service(scripting::Operation, std::uin
 #include "battle_services.inl"
 #include "personal_activity_services.inl"
 #include "save_services.inl"
+#include "native_options.inl"
 #include "native_ui_services.inl"
 
   } // namespace
@@ -1347,7 +1351,14 @@ std::optional<std::int64_t> invoke_battle_service(scripting::Operation, std::uin
         {0x28B10, reinterpret_cast<void *>(&update_native_tree_dialog), &tree_dialog_hook},
         {0x12D47B0, reinterpret_cast<void *>(&native_window_dirty), &window_dirty_hook},
         {0x1349BB0, reinterpret_cast<void *>(&native_tree_visual), &tree_visual_hook},
-        {0x12E56F0, reinterpret_cast<void *>(&native_window_exit), &window_exit_hook}};
+        {0x133EE30, reinterpret_cast<void *>(&native_tree_category_allowed), &tree_category_filter_hook},
+        {0x12E56F0, reinterpret_cast<void *>(&native_window_exit), &window_exit_hook},
+        {0x162DCE0, reinterpret_cast<void *>(&options_set_tabs), &options_set_tabs_hook},
+        {0x1B2C710, reinterpret_cast<void *>(&options_tab_changed), &options_tab_changed_hook},
+        {0x1B2FE00, reinterpret_cast<void *>(&options_build_row), &options_build_row_hook},
+        {0x1B2F7E0, reinterpret_cast<void *>(&options_row_event), &options_row_event_hook},
+        {0x1B2BCF0, reinterpret_cast<void *>(&options_describe), &options_describe_hook},
+        {0x1714E40, reinterpret_cast<void *>(&options_text_layout), &options_text_layout_hook}};
 
     for (const auto &binding : bindings) {
       const auto hook = ui_detail::create_hook(reinterpret_cast<void *>(module + binding.rva), binding.callback);

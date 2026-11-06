@@ -48,6 +48,13 @@ public sealed class ModApplication : ScriptMod
     }
 #endif
 
+    // Switched off by the manager: the game's own traits and jewel effects return.
+    protected override void OnDisabled()
+    {
+        TraitCatalog.Publish(new TraitDefinition?[TraitCatalog.Count]);
+        JewelComponent.RestoreForced(new ulong[8]);
+    }
+
     protected override void OnUnload()
     {
 #if S8_EXPERIMENTAL

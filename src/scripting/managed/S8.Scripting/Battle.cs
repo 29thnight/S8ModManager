@@ -91,6 +91,9 @@ public abstract class ScriptedTraitComponent : Component, IBattleEffect
 {
     public ushort PersonalityId { get; internal set; }
 
+    // The battle unit of the officer holding this trait.
+    public BattleUnitComponent Unit => GameObject.GetComponent<BattleMembershipComponent>()!.Unit;
+
     public void Show(string speech)
     {
         var membership = GameObject.GetComponent<BattleMembershipComponent>()!;
@@ -150,6 +153,46 @@ public sealed class ScriptEffectRegistry
 
         effects.Add(definition.Id, (definition,
             (gameObject, personality) => gameObject.AddComponent<T>(component => component.PersonalityId = personality), events));
+    }
+
+    // The same as Register<T> without writing a class: pass only the moments the effect
+    // acts on. The callback receives the trait, with its Unit and Show.
+    public void Register(ScriptEffectDefinition definition,
+        Action<ScriptedTraitComponent>? onTurnStart = null,
+        Action<ScriptedTraitComponent>? onUnitActionEnd = null,
+        Action<ScriptedTraitComponent>? onTurnEnd = null)
+    {
+        uint events = 0;
+
+        if (onTurnStart != null)
+            events |= 1U << (int)ScriptEvent.BattleTurnStarted;
+
+        if (onUnitActionEnd != null)
+            events |= 1U << (int)ScriptEvent.BattleUnitActionEnded;
+
+        if (onTurnEnd != null)
+            events |= 1U << (int)ScriptEvent.BattleTurnEnded;
+
+        effects.Add(definition.Id, (definition,
+            (gameObject, personality) => gameObject.AddComponent<CallbackEffect>(component =>
+            {
+                component.PersonalityId = personality;
+                component.TurnStart = onTurnStart;
+                component.UnitActionEnd = onUnitActionEnd;
+                component.TurnEnd = onTurnEnd;
+            }), events));
+    }
+
+    private sealed class CallbackEffect : ScriptedTraitComponent,
+        IBattleTurnStartEffect, IBattleUnitActionEndEffect, IBattleTurnEndEffect
+    {
+        public Action<ScriptedTraitComponent>? TurnStart, UnitActionEnd, TurnEnd;
+
+        public void OnBattleTurnStarted() => TurnStart?.Invoke(this);
+
+        public void OnBattleUnitActionEnded() => UnitActionEnd?.Invoke(this);
+
+        public void OnBattleTurnEnded() => TurnEnd?.Invoke(this);
     }
 
     public ScriptedTraitComponent Attach(string id, GameObject owner, ushort personality) =>

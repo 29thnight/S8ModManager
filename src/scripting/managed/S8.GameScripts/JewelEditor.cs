@@ -138,7 +138,6 @@ public sealed class JewelEditorModule : IDisposable
     private void OpenForcedList()
     {
         var available = definitions.Where(IsOpened).ToArray();
-        var selection = (ulong[])draft.Forced.Clone();
         var dialog = scene!.Create("ForcedJewels");
 
         dialog.Closing = (accepted, _) =>
@@ -146,9 +145,7 @@ public sealed class JewelEditorModule : IDisposable
             if (!accepted)
                 return;
 
-            foreach (var item in available)
-                selection[item.Id >> 6] &= ~(1UL << (item.Id & 63));
-
+            var selection = new ulong[8];
             foreach (int id in dialog.ReadSelection())
                 selection[id >> 6] |= 1UL << (id & 63);
 
@@ -157,7 +154,7 @@ public sealed class JewelEditorModule : IDisposable
         dialog.Show(DialogKind.MultiSelect, "보주 강제적용",
             available.Select(item => new UiRow(item.Id, item.Name, $"보조계통 강제적용 · ID {item.Id}")).ToArray(),
             caption: "강제적용할 개방 보주를 선택해 주십시오",
-            initialSelection: available.Where(item => (selection[item.Id >> 6] & (1UL << (item.Id & 63))) != 0)
+            initialSelection: available.Where(item => (draft.Forced[item.Id >> 6] & (1UL << (item.Id & 63))) != 0)
                 .Select(item => (int)item.Id).ToArray());
     }
 

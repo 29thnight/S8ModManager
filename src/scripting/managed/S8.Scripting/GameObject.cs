@@ -90,4 +90,8 @@ public interface IScriptModule : IDisposable
     void Initialize(ModContext context);
 
     void Dispatch(ScriptEvent kind, int owner, int value);
+
+    // The mod manager switched this mod off; Dispose follows. Undo what the mod
+    // applied to the game. Not called when a reload replaces the module.
+    void Disable() { }
 }

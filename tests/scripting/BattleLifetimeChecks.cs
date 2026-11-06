@@ -235,6 +235,21 @@ internal static unsafe class BattleLifetimeChecks
             var effect = (TraitCounter)registry.Attach("counter", officerObject, 254);
             effect.OnBattleTurnEnded();
 
+            // The same effect without a class or an interface.
+            int lambdaCalls = 0;
+            BattleUnitComponent? lambdaUnit = null;
+            registry.Register(new("lambda", "Lambda", "No class needed"),
+                onTurnEnd: trait => { ++lambdaCalls; lambdaUnit = trait.Unit; });
+            Check(registry.Handles("lambda", ScriptEvent.BattleTurnEnded)
+                && !registry.Handles("lambda", ScriptEvent.BattleTurnStarted)
+                && !registry.Handles("lambda", ScriptEvent.BattleUnitActionEnded),
+                "Lambda effect handles only the events it was given");
+            var lambda = registry.Attach("lambda", officerObject, 255);
+            ((IBattleTurnEndEffect)lambda).OnBattleTurnEnded();
+            Check(lambdaCalls == 1 && ReferenceEquals(lambdaUnit, unit) && lambda.PersonalityId == 255,
+                "Lambda effect runs with its trait and unit");
+            officerObject.RemoveComponent(lambda);
+
             Check(world.Units.Count == 2 && world.EventUnits.Count == 1, "Action scope retains the full roster");
             Check(effect.InitialPersonality == 254, "Effect identity is available during OnEnable");
             Check(unitState.InitialValue == 7 && unitState.Enables == 1, "Initialize before OnEnable");

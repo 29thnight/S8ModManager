@@ -1,0 +1,9 @@
+{
+  "id": "s8.manager",
+  "name": "모드 관리",
+  "version": "0.0.1",
+  "apiVersion": 21,
+  "runtime": "jit",
+  "entry": "S8.ManagerMod.dll",
+  "type": "S8.ManagerMod.ManagerMod"
+}

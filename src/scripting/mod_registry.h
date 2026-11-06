@@ -33,6 +33,7 @@ namespace s8::scripting {
     std::wstring entry; // file name inside directory
     std::wstring type;  // JIT only: the IScriptModule type name
     std::uint32_t api = 0; // required engine API version; 0 = not declared
+    std::uint32_t game_build = 0; // game executable build stamp the mod targets; 0 = not declared
     std::vector<ModDependency> dependencies;
     std::vector<std::string> conflicts;
   };

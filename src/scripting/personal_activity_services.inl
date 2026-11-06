@@ -26,6 +26,13 @@ void dispatch_personal_activity(Event event, int officer, int value, std::uint64
     execute_pending_march();
 }
 
+// The player's domestic actions: 개간 1, 상업 11, 성문 보수 21, 치안 31, 기술 41. Each was
+// measured to finish here and return to CityStateCommandMain; AI officers' actions use
+// the same execution function but never this state.
+bool is_domestic_activity(int category) {
+  return category == 1 || category == 11 || category == 21 || category == 31 || category == 41;
+}
+
 void domestic_activity_step(void *state) {
   void *activity = native_field<void *>(state, 0x20);
   const auto category = activity ? native_field<std::uint8_t>(activity, 0x38C) : 0;
@@ -34,7 +41,7 @@ void domestic_activity_step(void *state) {
   const auto officer_id = officer ? native_field<std::uint16_t>(officer, 8) : 0;
   void *city = native_field<void *>(native_field<void *>(state, 0x18), 0x130);
   void *manager = static_cast<std::byte *>(city) + 0x10;
-  const bool ready = category == 0x15 && officer && ensure_application();
+  const bool ready = is_domestic_activity(category) && officer && ensure_application();
   std::uint64_t epoch;
 
   {

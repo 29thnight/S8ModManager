@@ -1,4 +1,13 @@
 // Binding for the game's GemUnlockUILayout resource. Values and actions come from C#.
+ui_detail::Hook tree_category_filter_hook{};
+
+int native_tree_category_allowed(void *categories, std::uint8_t category) {
+  void *layout = native_tree_view.layout;
+  if (layout && categories == native_field<void *>(layout, 0x298))
+    return category >= 1 && category <= 11;
+  return reinterpret_cast<int (*)(void *, std::uint8_t)>(tree_category_filter_hook.original)(categories, category);
+}
+
 void native_tree_visual(void *gem, int animation) {
   void *layout = native_tree_view.layout;
   if (layout) {
@@ -85,6 +94,7 @@ void update_native_tree(void *layout, void *event) {
 
     reinterpret_cast<void (*)(void *, bool)>(vtable[0x238 / 8])(layout, true);
     native_tree_view.shown = true;
+    native_tree_view.categories_bound = false;
   }
 
   reinterpret_cast<void (*)(void *, void *)>(tree_update_hook.original)(layout, event);
@@ -128,7 +138,7 @@ void update_native_tree(void *layout, void *event) {
     }
   }
 
-  if (!native_tree_view.categories_bound) {
+  {
     void *handle = native_field<void *>(category_list, 0x68);
 
     const auto index = native_field<std::uint32_t>(handle, 0);
@@ -138,6 +148,12 @@ void update_native_tree(void *layout, void *event) {
       void *button = native_field<void *>(node, 0);
 
       if (native_field<std::uintptr_t>(button, 0) != native_ui_module + 0x259FF20)
+        continue;
+
+      // The editor can switch trees even when ordinary unlocking is unavailable.
+      auto *vtable = native_field<std::uintptr_t *>(button, 0);
+      reinterpret_cast<void (*)(void *, bool)>(vtable[0x110 / 8])(button, true);
+      if (native_tree_view.categories_bound)
         continue;
 
       const auto category = native_field<std::uint8_t>(button, 0x1C8);

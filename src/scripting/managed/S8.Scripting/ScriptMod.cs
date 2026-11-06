@@ -8,9 +8,13 @@ public abstract class ScriptMod : IScriptModule
     private readonly Dictionary<int, Action> menuActions = [];
     private readonly Dictionary<int, WindowRow> windowRows = [];
     private readonly Dictionary<int, WindowRow> openWindows = [];
+    // Action numbers come back in menu and window events without the registering mod,
+    // so they are unique across every mod that shares this SDK.
+    private static int nextAction;
     private MenuExtensionComponent? menus;
     private GameApplication? application;
-    private int nextAction;
+    private int optionsOwner;
+    private Action<int, int>? optionChanged;
 
     public ModContext Context { get; private set; } = null!;
 
@@ -28,14 +32,21 @@ public abstract class ScriptMod : IScriptModule
     // The whole native dialog stack closed. Release per-open state here.
     protected virtual void OnUiClosed() { }
 
-    // Events the SDK does not route (battle, activity and similar notifications).
+    // Events the SDK does not route (battle, activity and similar notifications,
+    // and Configure, which also follows a change to the set of running mods).
     protected virtual void OnEvent(ScriptEvent kind, int owner, int value) { }
 
     protected virtual void OnUnload() { }
 
+    // The mod manager switched this mod off during the run (OnUnload follows).
+    // Undo changes the mod applied to the game; a reload does not call this.
+    protected virtual void OnDisabled() { }
+
+    void IScriptModule.Disable() => OnDisabled();
+
     protected void AddMenu(MenuSurface surface, string label, Action clicked, int templateId = 5, int insertAfter = 5)
     {
-        int action = nextAction++;
+        int action = Interlocked.Increment(ref nextAction) - 1;
         menuActions.Add(action, clicked);
         Menus.Add(surface, action, label, templateId, insertAfter);
     }
@@ -44,9 +55,19 @@ public abstract class ScriptMod : IScriptModule
     protected void AddWindowRow(int slot, string label, string button, Action<int> clicked,
         Action<int, bool>? closing = null)
     {
-        int action = nextAction++;
+        int action = Interlocked.Increment(ref nextAction) - 1;
         windowRows.Add(action, new WindowRow(clicked, closing));
         Menus.AddWindowRow(slot, action, label, button);
+    }
+
+    // The extra tab on the title screen's options (환경설정). Register it in OnLoad;
+    // changed receives (row action, new choice index). One tab per mod.
+    protected void SetOptionsTab(string label, IReadOnlyList<OptionRow> rows, Action<int, int> changed)
+    {
+        if (optionsOwner == 0)
+            optionsOwner = OptionsTabNative.NewOwner();
+        OptionsTabNative.Register(optionsOwner, label, rows);
+        optionChanged = changed;
     }
 
     private MenuExtensionComponent Menus =>
@@ -57,6 +78,8 @@ public abstract class ScriptMod : IScriptModule
         Context = context;
         application = new GameApplication(context, GetType().Assembly);
         bool loaded = false;
+        var previous = UiScene.Dispatching;
+        UiScene.Dispatching = this;
         try
         {
             OnLoad();
@@ -66,12 +89,27 @@ public abstract class ScriptMod : IScriptModule
         }
         finally
         {
+            UiScene.Dispatching = previous;
             if (!loaded)
                 Dispose();
         }
     }
 
     void IScriptModule.Dispatch(ScriptEvent kind, int owner, int value)
+    {
+        var previous = UiScene.Dispatching;
+        UiScene.Dispatching = this;
+        try
+        {
+            DispatchCore(kind, owner, value);
+        }
+        finally
+        {
+            UiScene.Dispatching = previous;
+        }
+    }
+
+    private void DispatchCore(ScriptEvent kind, int owner, int value)
     {
         World.RefreshSession();
         if (World.DispatchActivity(kind, owner, value) || Application.Dispatch(kind, owner, value)
@@ -80,6 +118,12 @@ public abstract class ScriptMod : IScriptModule
 
         switch (kind)
         {
+            case ScriptEvent.OptionChanged:
+                // Every mod receives the event; only the registering mod owns the tab.
+                if (owner == optionsOwner && optionChanged != null)
+                    optionChanged(value >> 16, value & 0xFFFF);
+                return;
+
             case ScriptEvent.MenuClick:
                 if (menuActions.TryGetValue(value, out var menu))
                     menu();
@@ -109,7 +153,7 @@ public abstract class ScriptMod : IScriptModule
                 return;
         }
 
-        if (!UiScene.Route(kind, owner, value))
+        if (!UiScene.Route(kind, owner, value, this))
             OnEvent(kind, owner, value);
     }
 
@@ -118,9 +162,12 @@ public abstract class ScriptMod : IScriptModule
         try
         {
             OnUnload();
+            if (optionsOwner != 0)
+                OptionsTabNative.Release(optionsOwner);
         }
         finally
         {
+            optionChanged = null;
             application?.Dispose();
             application = null;
             menus = null;

@@ -16,6 +16,7 @@
     <!-- The mod manager is its own proxy entry; the cheat proxies are hid/dxgi/dinput8. -->
     <TargetName>xinput1_4</TargetName>
     <S8EditorsModDir>$(MSBuildThisFileDirectory)..\..\out\$(Platform)\$(Configuration)\scripts\mods\s8.editors\</S8EditorsModDir>
+    <S8ManagerModDir>$(MSBuildThisFileDirectory)..\..\out\$(Platform)\$(Configuration)\scripts\mods\s8.manager\</S8ManagerModDir>
     <OutDir>$(MSBuildThisFileDirectory)..\..\out\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(MSBuildThisFileDirectory)..\..\out\obj\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
     <DotNetHostPack Condition="'$(DotNetHostPack)'==''">$(ProgramW6432)\dotnet\packs\Microsoft.NETCore.App.Host.win-x64\10.0.14\runtimes\win-x64\native</DotNetHostPack>
@@ -34,6 +35,7 @@
     <None Include="native_window.inl" />
     <None Include="native_menus.inl" />
     <None Include="native_ui_services.inl" />
+    <None Include="native_options.inl" />
     <ClCompile Include="script_host.cpp" />
     <ClCompile Include="mod_entry.cpp" />
     <ClCompile Include="mod_registry.cpp" />
@@ -65,9 +67,11 @@
   <Target Name="BuildManagedScripts" AfterTargets="Build">
     <Copy SourceFiles="$(DotNetHostPack)\nethost.dll" DestinationFolder="$(OutDir)" />
     <Copy SourceFiles="$(MSBuildThisFileDirectory)managed\S8.GameScripts\mod.json" DestinationFolder="$(S8EditorsModDir)" />
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)managed\S8.ManagerMod\mod.json" DestinationFolder="$(S8ManagerModDir)" />
     <Copy SourceFiles="$(MSBuildThisFileDirectory)..\..\resources\effect_definitions.json" DestinationFolder="$(S8EditorsModDir)assets" />
     <Copy SourceFiles="$(MSBuildThisFileDirectory)..\..\resources\jewel_definitions.json" DestinationFolder="$(S8EditorsModDir)assets" />
     <Exec Command="dotnet build &quot;$(MSBuildThisFileDirectory)managed\S8.Scripting.Host\S8.Scripting.Host.csproj&quot; -c $(Configuration) -o &quot;$(OutDir)scripts&quot; --nologo" />
     <Exec Command="dotnet build &quot;$(MSBuildThisFileDirectory)managed\S8.GameScripts\S8.GameScripts.csproj&quot; -c $(Configuration) -o &quot;$(S8EditorsModDir.TrimEnd('\'))&quot; --nologo" />
+    <Exec Command="dotnet build &quot;$(MSBuildThisFileDirectory)managed\S8.ManagerMod\S8.ManagerMod.csproj&quot; -c $(Configuration) -o &quot;$(S8ManagerModDir.TrimEnd('\'))&quot; --nologo" />
   </Target>
 </Project>

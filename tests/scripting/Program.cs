@@ -10,6 +10,11 @@ unsafe class Program
     static delegate* unmanaged[Cdecl]<NativeApi*, int, int, int, int> dispatch;
     static delegate* unmanaged[Cdecl]<NativeApi*, int, int, int, int, int> managedDispatch;
     static int managedHandle = -1;
+    // A second running mod. The native side delivers every event to every mod, so the
+    // harness does too; a mod must act only on dialogs and menus it created.
+    static int otherHandle = -1;
+    // Menu and window-row actions by label, as the mods last registered them.
+    static readonly Dictionary<string, int> actions = [];
     static int checks;
     static readonly List<View> views = [];
     // Trait record fixture; grade (offset 0x2E) is 1 as in real game records.
@@ -49,9 +54,14 @@ unsafe class Program
     static int Send(ScriptEvent kind, int owner = 0, int value = 0)
     {
         fixed (NativeApi* p = &api)
-            return managedDispatch != null
-                ? managedDispatch(p, managedHandle, (int)kind, owner, value)
-                : dispatch(p, (int)kind, owner, value);
+        {
+            if (managedDispatch == null)
+                return dispatch(p, (int)kind, owner, value);
+            int result = managedDispatch(p, managedHandle, (int)kind, owner, value);
+            if (otherHandle >= 0)
+                managedDispatch(p, otherHandle, (int)kind, owner, value);
+            return result;
+        }
     }
 
     static int Main(string[] args)
@@ -69,6 +79,7 @@ unsafe class Program
         checks += PersonalActivityChecks.Run();
         checks += BattleLifetimeChecks.Run();
         checks += LiveSourceChecks.Run();
+        checks += OptionsChecks.Run();
         string output = Path.GetFullPath(args[0]);
         nint dll = NativeLibrary.Load(Path.Combine(output, "xinput1_4.dll"));
 
@@ -110,6 +121,19 @@ unsafe class Program
             Check(managedHandle == 0, "JIT mod registered");
             Check(register(id, modPath, gamePath, assembly, type) < 0, "Same mod id is not registered twice");
         }
+        // The game always runs the manager mod beside the editors, and every mod receives
+        // every event; dialogs and actions must stay with the mod that created them.
+        string builtManager = Path.Combine(output, "scripts", "mods", "s8.manager");
+        string manager = Path.Combine(host, "mods", "s8.manager");
+        Directory.CreateDirectory(manager);
+        foreach (string file in new[] { "S8.ManagerMod.dll", "mod.json" })
+            File.Copy(Path.Combine(builtManager, file), Path.Combine(manager, file), true);
+        fixed (char* id = "s8.manager", modPath = manager, gamePath = game, assembly = Path.Combine(manager, "S8.ManagerMod.dll"), type = "S8.ManagerMod.ManagerMod")
+        {
+            var register = (delegate* unmanaged[Cdecl]<char*, char*, char*, char*, char*, int>)&S8.Scripting.Host.Entry.Register;
+            otherHandle = register(id, modPath, gamePath, assembly, type);
+            Check(otherHandle == 1, "Manager mod registered beside the editors");
+        }
         managedDispatch = &S8.Scripting.Host.Entry.Dispatch;
         File.WriteAllText(Path.Combine(game, "S8RPK_traits_default.json"), """{"version":2,"traits":[{"id":1,"index":0,"effects":[{"type":0,"value":0,"param":0},{"type":0,"value":0,"param":0},{"type":0,"value":0,"param":0},{"type":0,"value":0,"param":0},{"type":0,"value":0,"param":0},{"type":0,"value":0,"param":0}]}],"customNames":{}}""");
         // Generated test directory only. Do not share this path with a game install.
@@ -129,7 +153,7 @@ unsafe class Program
         Check(Send(ScriptEvent.Open) == (int)ConnectionStatus.MissingCapability, "Unavailable service rejected when first used");
         api.Connection.Capabilities = NativeCapability.Ui | NativeCapability.GameData | NativeCapability.Memory;
         Check(Send(ScriptEvent.Open) == 0, "Manifest loads a mod");
-        Check(Send(ScriptEvent.MenuClick, 0, 0) == 0, "Registered menu opens the trait editor");
+        Check(Send(ScriptEvent.MenuClick, 0, actions["기재 편집"]) == 0, "Registered menu opens the trait editor");
         Check(views[^1].Kind == DialogKind.List && views[^1].Rows.Count == 1, "Catalog built from engine data");
         int catalog = views[^1].Owner;
 
@@ -165,7 +189,7 @@ unsafe class Program
         Check(Send(ScriptEvent.Closing, voices, 3) == 0, "Voice callback");
         Check(Send(ScriptEvent.Closing, detail.Owner, -1) == 0 && !File.Exists(config), "Cancel does not persist");
         Check(Send(ScriptEvent.Closed) == 0, "Components disposed");
-        Check(Send(ScriptEvent.MenuClick, 0, 1) == 0, "Session reopened from the in-game menu");
+        Check(Send(ScriptEvent.MenuClick, 0, actions["기재"]) == 0, "Session reopened from the in-game menu");
         catalog = views[^1].Owner;
         Check(Send(ScriptEvent.Select, catalog, 0) == 0, "Record reopened");
         detail = views[^1];
@@ -179,7 +203,7 @@ unsafe class Program
         Check(publishedTraits is { } published && published.Present == 1 && published.Voice == 3 && published.Name == "대덕",
             "Saved trait is published to the native trait runtime");
         Check(Send(ScriptEvent.Closed) == 0, "Final cleanup");
-        Check(Send(ScriptEvent.WindowClick, 42, 2) == 0, "Managed jewel window opens");
+        Check(Send(ScriptEvent.WindowClick, 42, actions["보주"]) == 0, "Managed jewel window opens");
         int tree = views[^1].Owner;
         Check(views[^1].Kind == DialogKind.GemTree, "Game tree resource requested");
         Check(Send(ScriptEvent.TreeClick, tree, 2) == 0 && windowDirty && jewelCommands.Count == 0,
@@ -189,7 +213,7 @@ unsafe class Program
         Check(Send(ScriptEvent.WindowClosing, 42, 0) == 0 && jewelCommands.Count == 0,
             "Parent cancel discards jewel changes");
 
-        Check(Send(ScriptEvent.WindowClick, 43, 2) == 0, "Jewel transaction reopened");
+        Check(Send(ScriptEvent.WindowClick, 43, actions["보주"]) == 0, "Jewel transaction reopened");
         tree = views[^1].Owner;
         Check(Send(ScriptEvent.TreeClick, tree, 2) == 0, "Jewel opening staged");
         Check(Send(ScriptEvent.Closing, tree, -1) == 0 && Send(ScriptEvent.Closed) == 0 && jewelCommands.Count == 0,
@@ -198,7 +222,7 @@ unsafe class Program
             jewelCommands[0].RawId == 66 && jewelCommands[0].Open,
             "Parent confirm submits catalog raw ID");
 
-        Check(Send(ScriptEvent.WindowClick, 44, 2) == 0, "Forced jewel transaction opens");
+        Check(Send(ScriptEvent.WindowClick, 44, actions["보주"]) == 0, "Forced jewel transaction opens");
         tree = views[^1].Owner;
         Check(Send(ScriptEvent.TreeClick, tree, -1) == 0 && views[^1].Kind == DialogKind.MultiSelect,
             "Forced application uses common multi-select");
@@ -341,6 +365,22 @@ unsafe class Program
             "Privilege proposal uses the privileged native request, not a normal pending proposal");
         Check(councilUiClosures == closuresBeforePrivilege + 2,
             "Cancelling the hub and executing a privileged proposal each request scene closure");
+
+        if (managedDispatch != null)
+        {
+            // Switched off from the options tab: the mod undoes its game changes, gets
+            // no events, and is loaded again by the next load event once switched on.
+            jewelMask[0] = 1;
+            var unload = (delegate* unmanaged[Cdecl]<NativeApi*, int, int>)&S8.Scripting.Host.Entry.Unload;
+            int stopped;
+            fixed (NativeApi* p = &api)
+                stopped = unload(p, managedHandle);
+            Check(stopped == 0 && publishedTraits is { Present: 0, Name: null } && jewelMask.All(word => word == 0),
+                "Switched-off mod restores the game's traits and jewel effects");
+            Check(Send(ScriptEvent.MenuClick, 0, actions["기재 편집"]) != 0, "Stopped mod is not running");
+            Check(Send(ScriptEvent.Open) == 0 && Send(ScriptEvent.MenuClick, 0, actions["기재 편집"]) == 0,
+                "Switched back on, the mod loads with the next load event");
+        }
 
         bool rejected = false;
 
@@ -510,7 +550,11 @@ unsafe class Program
             case 12:
                 return 1;
             case 13: // RegisterMenu
+                actions[new string(*(char**)((byte*)data + 16))] = ((int*)data)[1];
+                return 0;
             case 14: // RegisterWindowRow
+                actions[new string(*(char**)((byte*)data + 8))] = ((int*)data)[1];
+                return 0;
             case 24: // ReleaseUiRegistration
                 return 0;
             case 16: // ReadGameState
@@ -562,11 +606,21 @@ unsafe class Program
                     Enumerable.Range(0, tabCount).Select(i => new string(tabLabels[i])).ToArray(),
                     new Span<byte>((byte*)data + 16, 64).ToArray());
                 return 0;
+            case 61: // SetJewelForceMask: eight words.
+                if (bytes != 64)
+                    return -1;
+                new ReadOnlySpan<ulong>(data, 8).CopyTo(jewelMask);
+                return 0;
             case 64: // SetRowBadge: resource, width, height, palette.
                 if (bytes != 16)
                     return -1;
                 rowBadge = ((int)target, (int)argument, ((int*)data)[0], ((int*)data)[3]);
                 return 0;
+            case 65: // SetOptionsTab: the manager mod's tab.
+                return 0;
+            case 66: // ReadModList: host API version and game build, no mods.
+                "21\t0\n".AsSpan().CopyTo(new Span<char>(data, (int)bytes / 2));
+                return 5;
             case 23: // ReadSelection
                 selectedJewels.AsSpan().CopyTo(new Span<int>(data, (int)bytes / 4));
                 return selectedJewels.Length;

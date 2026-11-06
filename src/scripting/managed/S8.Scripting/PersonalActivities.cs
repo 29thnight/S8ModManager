@@ -1,8 +1,13 @@
 namespace S8.Scripting;
 
+// The game's domestic action IDs, the same values RequestDomesticActivity accepts.
 public enum DomesticActivityKind
 {
-    GateRepair = 0x15
+    Cultivation = 1,  // 농촌: 개간 (농업)
+    Commerce = 11,    // 시장: 상업
+    GateRepair = 21,  // 성문: 보수 (방어)
+    PublicOrder = 31, // 둔영: 치안
+    Technology = 41   // 공방: 기술
 }
 
 public sealed record DomesticActivityInfo(

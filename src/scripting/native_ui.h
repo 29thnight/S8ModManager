@@ -42,5 +42,7 @@ namespace s8::scripting {
   // trait_services.cpp: the catalog is queued by the mod and applied by the manager thread.
   std::int64_t set_trait_catalog(const void *data, std::uint32_t bytes);
   void tick_trait_catalog(std::uintptr_t game_root, std::uint64_t epoch);
+  // script_host.cpp: true once after mods were switched on or off during a callback.
+  bool take_mod_selection_change();
 
 } // namespace s8::scripting

@@ -108,6 +108,15 @@ namespace s8::scripting {
       manifest.api = api->get<std::uint32_t>();
     }
 
+    if (const auto build = root.find("gameBuild"); build != root.end()) {
+      std::uint32_t value = 0;
+      const auto hex = build->is_string() ? build->get<std::string>() : std::string{};
+      const auto [next, error] = std::from_chars(hex.data(), hex.data() + hex.size(), value, 16);
+      if (hex.empty() || hex.size() > 8 || error != std::errc{} || next != hex.data() + hex.size() || value == 0)
+        return std::unexpected(L"gameBuild는 게임 실행 파일 빌드 값(16진수 문자열, 예 \"69A67ED1\")이어야 합니다.");
+      manifest.game_build = value;
+    }
+
     if (const auto dependencies = root.find("dependencies"); dependencies != root.end()) {
       if (!dependencies->is_object())
         return std::unexpected(L"dependencies는 {\"모드 id\": \"최소 버전\"} 형식이어야 합니다.");

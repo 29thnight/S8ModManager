@@ -98,6 +98,10 @@ internal static unsafe class PersonalActivityChecks
             Check(talk?.SessionId == session && ReferenceEquals(talk.Officer, officer)
                 && ReferenceEquals(talk.Partner, partner), "Talk payload identifies both canonical participants");
             Check(talkSignals == 1, "World event receives the talk trigger once");
+
+            Check(world.DispatchActivity(ScriptEvent.DomesticActivityCompleted, 1, 31), "Public order event handled");
+            Check(repair?.Kind == DomesticActivityKind.PublicOrder && counter.Repairs == 2 && repairSignals == 2,
+                "Every measured domestic action reaches the same handler with its own kind");
             Check(ReferenceEquals(world.GetOfficer(1).GetComponent<Counter>(), counter),
                 "Resolving an officer does not recreate its component");
             Check(!world.DispatchActivity(ScriptEvent.Click, 0, 0), "UI events are not consumed as activities");

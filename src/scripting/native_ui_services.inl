@@ -6,6 +6,9 @@ std::optional<std::int64_t> invoke_ui_service(Operation operation, std::uint64_t
   if (const auto result = invoke_save_service(operation, target, argument, data, bytes))
     return result;
 
+  if (const auto result = invoke_options_service(operation, target, data, bytes))
+    return result;
+
   if (const auto result = invoke_march_service(operation, target, argument, data, bytes))
     return result;
 
@@ -137,9 +140,16 @@ std::optional<std::int64_t> invoke_ui_service(Operation operation, std::uint64_t
         return -1;
     }
     // Script callbacks run on the game thread, so the edit is applied in place.
-    for (std::uint32_t i = 0; i < count; ++i)
+    for (std::uint32_t i = 0; i < count; ++i) {
       if (!apply_jewel_command(commands[i]))
         return -9;
+      const auto raw_id = commands[i].raw_id;
+      if (raw_id) {
+        auto &byte = game_publication.bitmap[raw_id >> 3];
+        const auto bit = static_cast<std::uint8_t>(1u << (raw_id & 7));
+        byte = commands[i].open ? byte | bit : byte & ~bit;
+      }
+    }
     const auto mask = jewel_force_mask();
     std::copy(mask.begin(), mask.end(), game_publication.mask);
     return 0;

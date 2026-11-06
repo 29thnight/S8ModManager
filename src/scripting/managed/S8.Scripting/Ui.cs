@@ -60,16 +60,21 @@ public sealed class UiScene : IDisposable
     private readonly Dictionary<int, DialogComponent> dialogs = [];
     private readonly List<GameObject> objects = [];
     private static int nextOwner;
-    // Which scene created each live dialog, so ScriptMod can route dialog events.
-    private static readonly Dictionary<int, UiScene> owners = [];
+    // Which scene, and which mod, created each live dialog. JIT mods share this SDK
+    // assembly and every mod receives every event, so a dialog event is routed only
+    // from the mod that created the dialog; otherwise each running mod would deliver it.
+    private static readonly Dictionary<int, (UiScene Scene, object? Mod)> owners = [];
+
+    // The mod whose callback is running; ScriptMod sets it around its own dispatch.
+    [ThreadStatic] internal static object? Dispatching;
 
     internal bool ContainsOwner(int owner) => dialogs.ContainsKey(owner);
 
-    internal static bool Route(ScriptEvent kind, int owner, int value)
+    internal static bool Route(ScriptEvent kind, int owner, int value, object mod)
     {
-        if (!owners.TryGetValue(owner, out var scene))
+        if (!owners.TryGetValue(owner, out var entry) || !ReferenceEquals(entry.Mod, mod))
             return false;
-        scene.Dispatch(kind, owner, value);
+        entry.Scene.Dispatch(kind, owner, value);
         return true;
     }
 
@@ -88,7 +93,7 @@ public sealed class UiScene : IDisposable
 
         dialog.Owner = checked(++nextOwner);
         dialogs.Add(dialog.Owner, dialog);
-        owners.Add(dialog.Owner, this);
+        owners.Add(dialog.Owner, (this, Dispatching));
         return dialog;
     }
 
