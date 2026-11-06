@@ -1301,25 +1301,29 @@ std::optional<std::int64_t> invoke_battle_service(scripting::Operation, std::uin
     static std::uint32_t last_generation = 0;
     static std::uint64_t epoch = 0;
 
-    std::lock_guard lock(native_ui_mutex);
-    if (epoch == 0 || root != last_root || player != last_player || world_save_generation != last_generation) {
-      ++epoch;
-      last_root = root;
-      last_player = player;
-      last_generation = world_save_generation;
-      march_requests.clear();
-    }
+    {
+      std::lock_guard lock(native_ui_mutex);
+      if (epoch == 0 || root != last_root || player != last_player || world_save_generation != last_generation) {
+        ++epoch;
+        last_root = root;
+        last_player = player;
+        last_generation = world_save_generation;
+        march_requests.clear();
+      }
 
-    UiPublication publication{};
-    publication.epoch = epoch;
-    std::copy(mask.begin(), mask.end(), publication.mask);
-    std::copy(std::begin(bitmap), std::end(bitmap), publication.bitmap);
-    publication.ready = root != 0;
-    publication.has_bitmap = has_bitmap && protagonist != 0;
-    publication.protagonist_id = protagonist ? protagonist : 0xFFFF;
-    publication.menus_installed = ui_hooks_installed && application_ready;
-    game_publication = publication;
-    native_ui_publication = {{epoch}, publication.ready};
+      UiPublication publication{};
+      publication.epoch = epoch;
+      std::copy(mask.begin(), mask.end(), publication.mask);
+      std::copy(std::begin(bitmap), std::end(bitmap), publication.bitmap);
+      publication.ready = root != 0;
+      publication.has_bitmap = has_bitmap && protagonist != 0;
+      publication.protagonist_id = protagonist ? protagonist : 0xFFFF;
+      publication.menus_installed = ui_hooks_installed && application_ready;
+      game_publication = publication;
+      native_ui_publication = {{epoch}, publication.ready};
+    }
+    // Outside the UI lock: applying the trait catalog may install hooks or write the trait table.
+    tick_trait_catalog(root, epoch);
   }
 
 } // namespace s8::scripting

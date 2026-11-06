@@ -49,4 +49,85 @@ void mod_selection() {
   assert(!parse_mod_manifest(R"({"id":"s8.editors","version":"0.0.1","runtime":"aot","entry":"..\\x.dll"})", L"m"));
   assert(!parse_mod_manifest(R"({"id":"S8 Editors","version":"0.0.1","runtime":"aot","entry":"x.dll"})", L"m"));
   assert(!parse_mod_manifest("not json", L"m"));
+
+  // Declarations: dependencies, conflicts and the API version.
+  const auto declared = parse_mod_manifest(
+      R"({"id":"a","version":"1.0.0","runtime":"aot","entry":"a.dll","apiVersion":17,"dependencies":{"core":"0.2.0"},"conflicts":["b"]})",
+      L"m");
+  assert(declared && declared->api == 17 && declared->dependencies.size() == 1 &&
+         declared->dependencies[0].id == "core" && (declared->dependencies[0].minimum == ModVersion{0, 2, 0}) &&
+         declared->conflicts == std::vector<std::string>{"b"});
+  assert(!parse_mod_manifest(R"({"id":"a","version":"1.0.0","runtime":"aot","entry":"a.dll","dependencies":{"a":"1.0.0"}})", L"m"));
+  assert(!parse_mod_manifest(R"({"id":"a","version":"1.0.0","runtime":"aot","entry":"a.dll","dependencies":{"core":"1.0"}})", L"m"));
+  assert(!parse_mod_manifest(R"({"id":"a","version":"1.0.0","runtime":"aot","entry":"a.dll","conflicts":"b"})", L"m"));
+  assert(!parse_mod_manifest(R"({"id":"a","version":"1.0.0","runtime":"aot","entry":"a.dll","apiVersion":0})", L"m"));
+}
+
+namespace {
+  ModManifest needing(const char *id, const char *dependency, ModVersion minimum, const wchar_t *folder) {
+    auto value = manifest(id, {1, 0, 0}, ModRuntime::Jit, folder);
+    value.dependencies.push_back({dependency, minimum});
+    return value;
+  }
+
+  std::vector<std::string> ids(const ModSelection &selection) {
+    std::vector<std::string> result;
+    for (const auto &mod : selection.active)
+      result.push_back(mod.id);
+    return result;
+  }
+} // namespace
+
+void mod_state_and_order() {
+  // State file round trip; missing "enabled" means enabled.
+  const auto state = parse_mod_state(R"({"version":1,"mods":[{"id":"b","enabled":false},{"id":"a"}]})");
+  assert(state && state->mods.size() == 2 && !state->mods[0].enabled && state->mods[1].enabled);
+  assert(parse_mod_state(write_mod_state(*state)) == *state);
+  assert(!parse_mod_state(R"({"mods":[{"id":"a"},{"id":"a"}]})"));
+  assert(!parse_mod_state(R"({"mods":[{"id":"a","enabled":"yes"}]})"));
+  assert(!parse_mod_state("[]"));
+
+  // Merge keeps listed entries (even absent mods) and appends new ids enabled.
+  const auto merged = merge_mod_state(*state, {manifest("c", {1, 0, 0}, ModRuntime::Jit, L"c"),
+                                               manifest("a", {1, 0, 0}, ModRuntime::Jit, L"a")});
+  assert(merged.mods.size() == 3 && merged.mods[0].id == "b" && merged.mods[2].id == "c" && merged.mods[2].enabled);
+
+  // Disabled mods are skipped; the state file decides the order.
+  ModState order{{{"z", true}, {"y", false}, {"x", true}}};
+  auto ordered = select_mods({manifest("x", {1, 0, 0}, ModRuntime::Jit, L"x"),
+                              manifest("y", {1, 0, 0}, ModRuntime::Jit, L"y"),
+                              manifest("z", {1, 0, 0}, ModRuntime::Jit, L"z")},
+                             order);
+  assert((ids(ordered) == std::vector<std::string>{"z", "x"}) && ordered.skipped.size() == 1);
+
+  // A dependency loads first even when the state file lists it later.
+  ModState late{{{"user", true}, {"core", true}}};
+  auto dependent = select_mods({needing("user", "core", {1, 0, 0}, L"u"), manifest("core", {1, 0, 0}, ModRuntime::Jit, L"c")},
+                               late);
+  assert((ids(dependent) == std::vector<std::string>{"core", "user"}));
+
+  // Missing, disabled or too old dependencies skip the dependent, and that cascades.
+  ModState core_off{{{"core", false}}};
+  auto cascade = select_mods({manifest("core", {1, 0, 0}, ModRuntime::Jit, L"c"), needing("user", "core", {1, 0, 0}, L"u"),
+                              needing("addon", "user", {1, 0, 0}, L"a")},
+                             core_off);
+  assert(cascade.active.empty() && cascade.skipped.size() == 3);
+  auto old = select_mods({manifest("core", {0, 9, 0}, ModRuntime::Jit, L"c"), needing("user", "core", {1, 0, 0}, L"u")});
+  assert((ids(old) == std::vector<std::string>{"core"}));
+
+  // A conflict keeps the mod that comes first; either side may declare it.
+  auto left = manifest("left", {1, 0, 0}, ModRuntime::Jit, L"l");
+  left.conflicts.push_back("right");
+  ModState right_first{{{"right", true}, {"left", true}}};
+  auto conflict = select_mods({left, manifest("right", {1, 0, 0}, ModRuntime::Jit, L"r")}, right_first);
+  assert((ids(conflict) == std::vector<std::string>{"right"}) && conflict.skipped[0].manifest.id == "left");
+
+  // Cycles cannot load.
+  auto cycle = select_mods({needing("p", "q", {1, 0, 0}, L"p"), needing("q", "p", {1, 0, 0}, L"q")});
+  assert(cycle.active.empty() && cycle.skipped.size() == 2);
+
+  // API mismatch is skipped only when both sides declare a version.
+  auto newer_api = manifest("api", {1, 0, 0}, ModRuntime::Jit, L"api");
+  newer_api.api = 18;
+  assert(select_mods({newer_api}, {}, 17).active.empty() && select_mods({newer_api}, {}, 0).active.size() == 1);
 }

@@ -185,11 +185,42 @@ namespace {
     return mod.handle >= 0;
   }
 
+  // A missing file is created and newly found mods are appended. A file that
+  // does not parse is left untouched so the user's edits are not overwritten.
+  ModState load_state(const std::filesystem::path &path, const std::vector<ModManifest> &found) {
+    ModState state;
+    std::error_code error;
+    const bool exists = std::filesystem::is_regular_file(path, error);
+    if (exists) {
+      std::ifstream file(path, std::ios::binary);
+      std::ostringstream content;
+      content << file.rdbuf();
+      auto parsed = parse_mod_state(content.str());
+      if (!parsed) {
+        log(path.wstring() + L": " + parsed.error() + L" 모든 모드를 켜진 것으로 봅니다.");
+        return {};
+      }
+      state = std::move(*parsed);
+    }
+
+    auto merged = merge_mod_state(state, found);
+    if (!exists || merged != state) {
+      const auto temporary = path.wstring() + L".tmp";
+      std::ofstream(temporary, std::ios::binary | std::ios::trunc) << write_mod_state(merged);
+      std::filesystem::rename(temporary, path, error);
+      if (error)
+        log(path.wstring() + L": 상태 파일을 저장하지 못했습니다.");
+    }
+    return merged;
+  }
+
   void load_mods() {
     host.loaded = true;
     host.base = module_directory();
 
-    auto selection = select_mods(scan_mods(host.base / L"scripts" / L"mods"));
+    auto found = scan_mods(host.base / L"scripts" / L"mods");
+    const auto state = load_state(host.base / L"scripts" / L"mods.json", found);
+    auto selection = select_mods(std::move(found), state, api_version);
 
     for (const auto &skipped : selection.skipped)
       log(skipped.manifest.directory.wstring() + L": " + skipped.reason);

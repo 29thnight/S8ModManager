@@ -12,12 +12,21 @@ unsafe class Program
     static int managedHandle = -1;
     static int checks;
     static readonly List<View> views = [];
-    static byte[] memory = new byte[64];
+    // Trait record fixture; grade (offset 0x2E) is 1 as in real game records.
+    static byte[] memory = CreateTraitRecord();
+
+    static byte[] CreateTraitRecord()
+    {
+        var record = new byte[64];
+        record[0x2E] = 1;
+        return record;
+    }
     static readonly byte[] jewelBitmap = new byte[34];
     static readonly ulong[] jewelMask = new ulong[8];
     static readonly List<(ushort RawId, bool Open, ulong Mask)> jewelCommands = [];
     static int[] selectedJewels = [];
     static bool windowDirty;
+    static (byte Present, int Voice, string? Name)? publishedTraits;
     static int councilUiRequests;
     static bool councilUiAuthority = true;
     static bool councilUiComplete;
@@ -99,7 +108,7 @@ unsafe class Program
             Check(register(id, modPath, gamePath, assembly, type) < 0, "Same mod id is not registered twice");
         }
         managedDispatch = &S8.Scripting.Host.Entry.Dispatch;
-        File.WriteAllText(Path.Combine(game, "S8RPK_traits_default.json"), """{"version":2,"traits":[{"id":1,"index":0,"effects":[]}],"customNames":{}}""");
+        File.WriteAllText(Path.Combine(game, "S8RPK_traits_default.json"), """{"version":2,"traits":[{"id":1,"index":0,"effects":[{"type":0,"value":0,"param":0},{"type":0,"value":0,"param":0},{"type":0,"value":0,"param":0},{"type":0,"value":0,"param":0},{"type":0,"value":0,"param":0},{"type":0,"value":0,"param":0}]}],"customNames":{}}""");
         // Generated test directory only. Do not share this path with a game install.
         string config = Path.Combine(mod, "san8r_traits_config.json");
         string forcedFile = Path.Combine(mod, "S8.Editors.jewels.json");
@@ -155,6 +164,8 @@ unsafe class Program
             Check(saved.RootElement.GetProperty("customNames").GetProperty("0").GetProperty("voice").GetUInt16() == 3,
                 "Voice is persisted for native application");
         Check(BitConverter.ToUInt16(memory, 0x30) == 0, "Managed editor does not write voice directly");
+        Check(publishedTraits is { } published && published.Present == 1 && published.Voice == 3 && published.Name == "대덕",
+            "Saved trait is published to the native trait runtime");
         Check(Send(ScriptEvent.Closed) == 0, "Final cleanup");
         Check(Send(ScriptEvent.WindowClick, 42, 2) == 0, "Managed jewel window opens");
         int tree = views[^1].Owner;
@@ -523,6 +534,12 @@ unsafe class Program
             case 20: // SetTreeFooter
             case 21: // GetTreeCategory
             case 22: // GetGemCategory
+                return 0;
+            case 62: // SetTraitCatalog: record 0 is trait ID 1.
+                if (bytes != 254 * 72)
+                    return -1;
+                char* name = *(char**)data;
+                publishedTraits = (((byte*)data)[52], *(int*)((byte*)data + 68), name == null ? null : new string(name));
                 return 0;
             case 23: // ReadSelection
                 selectedJewels.AsSpan().CopyTo(new Span<int>(data, (int)bytes / 4));

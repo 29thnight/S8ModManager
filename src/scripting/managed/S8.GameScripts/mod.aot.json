@@ -2,6 +2,7 @@
   "id": "s8.editors",
   "name": "기재·보주 편집",
   "version": "0.0.1",
+  "apiVersion": 18,
   "runtime": "aot",
   "entry": "S8.GameScripts.dll"
 }

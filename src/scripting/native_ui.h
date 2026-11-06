@@ -39,5 +39,8 @@ namespace s8::scripting {
   std::array<std::uint64_t, 8> jewel_force_mask();
   bool set_jewel_force_mask(const std::array<std::uint64_t, 8> &mask);
   bool apply_jewel_command(const UiJewelCommand &command);
+  // trait_services.cpp: the catalog is queued by the mod and applied by the manager thread.
+  std::int64_t set_trait_catalog(const void *data, std::uint32_t bytes);
+  void tick_trait_catalog(std::uintptr_t game_root, std::uint64_t epoch);
 
 } // namespace s8::scripting

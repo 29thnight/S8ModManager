@@ -128,7 +128,8 @@ internal enum Operation
     SetFormButtonLabel,
     SetFormButtonIcon,
     ReadArchiveResource,
-    SetJewelForceMask
+    SetJewelForceMask,
+    SetTraitCatalog
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -179,7 +180,8 @@ public static unsafe class Native
                 => NativeCapability.GameData,
             Operation.InspectMemory or Operation.ReadMemory or Operation.WriteMemory or Operation.GetSession
                 => NativeCapability.Memory,
-            Operation.ReadGameState or Operation.SubmitGameCommand or Operation.GetGemCategory or Operation.SetJewelForceMask
+            Operation.ReadGameState or Operation.SubmitGameCommand or Operation.GetGemCategory or Operation.SetJewelForceMask or
+            Operation.SetTraitCatalog
                 => NativeCapability.GameData,
             _ => NativeCapability.Ui
         };

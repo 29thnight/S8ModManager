@@ -42,6 +42,9 @@ void native_menu_controls(void *group, const NativeMenuControl *controls, int co
     original(group, controls, count, parent);
     return;
   }
+  // Load mods with the first game menu (the title menu), before "resume" can load
+  // a save: the trait mod must publish its custom traits before the save is read.
+  ensure_application();
   const auto type = native_field<std::uintptr_t>(parent, 0) - native_ui_module;
   if (type == 0x2590970 && count == 8) {
     const bool ready = ensure_application();

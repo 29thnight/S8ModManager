@@ -19,6 +19,12 @@
 
 - 모드는 `scripts\mods\<폴더>\mod.json`으로 선언합니다. `runtime`은 `jit` 또는 `aot`입니다.
 - 같은 `id`의 모드가 여러 개면 하나만 적용합니다. 버전이 높은 쪽, 버전이 같으면 JIT 쪽입니다.
+- 선택 항목: `apiVersion`(요구 엔진 API 버전, 다르면 건너뜀), `dependencies`(`{"모드 id": "최소 버전"}`), `conflicts`(같이 켤 수 없는 모드 id 배열).
+- `scripts\mods.json`이 켜기·끄기와 적재 순서를 정합니다. 없으면 만들고, 새 모드는 켜진 상태로 끝에 덧붙입니다. 형식이 틀리면 고치지 않고 모든 모드를 켜진 것으로 봅니다.
+  ```json
+  { "version": 1, "mods": [ { "id": "s8.editors", "enabled": true } ] }
+  ```
+- 적재 규칙: 꺼진 모드, API 버전이 다른 모드, 필요한 모드가 없거나 버전이 낮은 모드는 건너뜁니다(연쇄 적용). 충돌하면 순서가 앞선 쪽만 적용합니다. 의존 모드는 항상 먼저 불러오고, 의존이 순환하면 모두 건너뜁니다. 건너뛴 이유는 `scripts\mod_manager.log`가 아니라 디버그 출력에 남습니다.
 - 모드는 자기 폴더만 씁니다. 자산은 `assets\`에서 읽고, 저장 파일(예: `san8r_traits_config.json`, `S8.Editors.jewels.json`)은 모드 폴더에 씁니다. 게임 폴더는 읽기만 합니다.
 - 0.0.1(`s8.editors`)은 기재 편집과 보주 편집만 포함합니다. 다른 기능은 Release 빌드에서 제외합니다.
 - AOT판: `dotnet publish src/scripting/managed/S8.GameScripts -c Release -r win-x64 -p:PublishAot=true -o <게임>\scripts\mods\s8.editors.aot`

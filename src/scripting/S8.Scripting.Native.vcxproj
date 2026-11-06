@@ -38,6 +38,7 @@
     <ClCompile Include="mod_entry.cpp" />
     <ClCompile Include="mod_registry.cpp" />
     <ClCompile Include="jewel_services.cpp" />
+    <ClCompile Include="trait_services.cpp" />
     <ClInclude Include="mod_registry.h" />
     <ClCompile Include="game_binding.cpp" />
     <ClCompile Include="engine_services.cpp" />
@@ -51,6 +52,10 @@
     <ClCompile Include="..\domain\secondary_jewel.cpp" />
     <ClCompile Include="..\platform\windows\hook.cpp" />
     <ClCompile Include="..\platform\windows\process_memory.cpp" />
+    <ClCompile Include="..\platform\windows\code_memory.cpp" />
+    <ClCompile Include="..\platform\windows\code_patch.cpp" />
+    <ClCompile Include="..\game\native_patch.cpp" />
+    <ClCompile Include="..\game\trait_runtime_native.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\platform\windows\S8.MinHook.vcxproj"><Project>{CFD9C034-41D1-4619-8D9C-2539C7F19F4C}</Project></ProjectReference>

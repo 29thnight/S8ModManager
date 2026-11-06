@@ -104,6 +104,9 @@ std::optional<std::int64_t> invoke_ui_service(Operation operation, std::uint64_t
     return 0;
   }
 
+  if (operation == Operation::SetTraitCatalog)
+    return set_trait_catalog(data, bytes);
+
   // The cheat overlay is a separate product; the mod manager has no overlay to open.
   if (operation == Operation::RequestOverlay)
     return static_cast<std::int64_t>(Status::MissingCapability);

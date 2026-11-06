@@ -61,6 +61,10 @@ public sealed class TraitEditorModule : IDisposable
 
             definitions[item.GetProperty("type").GetUInt16()] = definition;
         }
+
+        // Apply the saved custom traits before any save is loaded.
+        if (TraitConfiguration.Publish(context) is { } error)
+            System.Diagnostics.Trace.WriteLine("[S8 mods] " + error);
     }
 
     // The first save is seeded from the game's default trait table (read only).
@@ -162,6 +166,7 @@ public sealed class TraitEditorModule : IDisposable
             string? error = store.Save(current);
 #endif
 
+            error ??= TraitConfiguration.Publish(context);
             if (error != null)
             {
                 pendingError = error;
@@ -171,7 +176,7 @@ public sealed class TraitEditorModule : IDisposable
 #if S8_EXPERIMENTAL
             ScriptedTraits.Save(current.Source.Id, current.ScriptEffects);
 #endif
-            // The native catalog watcher applies effects and voice from the saved configuration.
+            // Publishing the saved configuration above applied effects and voice to the game.
             accepted[current.Source.Id] = (current.Name, current.Description);
         };
         catalog.Resumed = () =>

@@ -82,8 +82,11 @@ namespace s8::scripting {
               ? reinterpret_cast<const wchar_t *(*)(void *)>(module + 0x170E2D0)(reinterpret_cast<void *>(record))
               : reinterpret_cast<const wchar_t *(*)(void *)>(module + 0x170ABB0)(reinterpret_cast<void *>(record));
 
-      if (!text)
-        return -8;
+      // A record without game text (e.g. a custom trait in an unnamed slot) reads as empty.
+      if (!text) {
+        *static_cast<wchar_t *>(data) = L'\0';
+        return 0;
+      }
 
       // Returned game string is external data; copy bounded units once here.
       auto *output = static_cast<wchar_t *>(data);

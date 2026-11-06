@@ -2,7 +2,7 @@
 #include <cstdint>
 
 namespace s8::scripting {
-  inline constexpr std::uint32_t api_version = 17;
+  inline constexpr std::uint32_t api_version = 18;
   inline constexpr std::uint64_t ui_capability = 1, data_capability = 2, memory_capability = 4;
   enum class Status : int {
     Ready = 0,
@@ -148,8 +148,23 @@ namespace s8::scripting {
     SetFormButtonLabel,
     SetFormButtonIcon,
     ReadArchiveResource,
-    SetJewelForceMask
+    SetJewelForceMask,
+    SetTraitCatalog
   };
+
+  // SetTraitCatalog: one record per trait ID 1..254 (index = ID - 1). The C# mod
+  // decides every value; the native runtime only applies them to the game.
+  struct TraitCatalogRecord {
+    const wchar_t *name;        // null keeps the game's text
+    const wchar_t *description; // null keeps the game's text
+    std::uint16_t effects[18];  // (type, value, param) x 6
+    std::uint8_t present;       // the effect row is defined
+    std::uint8_t has_metadata;  // name/description/clone/grade fields apply
+    std::uint16_t reserved;
+    std::int32_t clone_source, background_trait, grade, voice; // -1 = unset
+  };
+  static_assert(sizeof(TraitCatalogRecord) == 72);
+  inline constexpr std::uint32_t trait_catalog_count = 254;
 
   enum class DialogKind : int { List, Form, CompactForm, Text, MultilineText, Message, GemTree, MultiSelect, CityMap };
 
