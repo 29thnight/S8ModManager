@@ -1,4 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><AllowUnsafeBlocks>true</AllowUnsafeBlocks><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings></PropertyGroup>
-  <ItemGroup><ProjectReference Include="..\..\src\scripting\managed\S8.Scripting\S8.Scripting.csproj" /><ProjectReference Include="..\..\src\scripting\managed\S8.Scripting.Host\S8.Scripting.Host.csproj" /><ProjectReference Include="..\..\src\scripting\managed\S8.ManagerMod\S8.ManagerMod.csproj" /><ProjectReference Include="..\..\src\scripting\managed\S8.GameScripts\S8.GameScripts.csproj" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="..\..\src\scripting\managed\S8.Scripting\S8.Scripting.csproj" /><ProjectReference Include="..\..\src\scripting\managed\S8.Scripting.Host\S8.Scripting.Host.csproj" /><ProjectReference Include="..\..\src\scripting\managed\S8.ManagerMod\S8.ManagerMod.csproj" /><ProjectReference Include="..\..\src\scripting\managed\S8.GameScripts\S8.GameScripts.csproj" /><ProjectReference Include="..\..\src\scripting\managed\S8.LuaHost\S8.LuaHost.csproj" /></ItemGroup>
 </Project>

@@ -1,0 +1,9 @@
+{
+  "id": "s8.lua-sample",
+  "name": "Lua 예제",
+  "version": "0.0.1",
+  "apiVersion": 21,
+  "runtime": "jit",
+  "entry": "S8.LuaHost.dll",
+  "type": "S8.LuaHost.LuaMod"
+}

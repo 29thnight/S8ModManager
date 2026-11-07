@@ -9,6 +9,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "S8.MinHook", "src\platform\
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "S8.ModManager.Tests", "tests\S8.ModManager.Tests.vcxproj", "{7A3C2E51-9B4D-4F2A-8E61-5D0C3B7A9E14}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "S8.LuaJIT", "src\scripting\lua\S8.LuaJIT.vcxproj", "{5E2B7C41-3D8A-4F96-B1E0-7A4C9D2F6B18}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -26,6 +28,10 @@ Global
 		{7A3C2E51-9B4D-4F2A-8E61-5D0C3B7A9E14}.Debug|x64.ActiveCfg = Debug|x64
 		{7A3C2E51-9B4D-4F2A-8E61-5D0C3B7A9E14}.Debug|x64.Build.0 = Debug|x64
 		{7A3C2E51-9B4D-4F2A-8E61-5D0C3B7A9E14}.Release|x64.ActiveCfg = Debug|x64
+		{5E2B7C41-3D8A-4F96-B1E0-7A4C9D2F6B18}.Debug|x64.ActiveCfg = Debug|x64
+		{5E2B7C41-3D8A-4F96-B1E0-7A4C9D2F6B18}.Debug|x64.Build.0 = Debug|x64
+		{5E2B7C41-3D8A-4F96-B1E0-7A4C9D2F6B18}.Release|x64.ActiveCfg = Release|x64
+		{5E2B7C41-3D8A-4F96-B1E0-7A4C9D2F6B18}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

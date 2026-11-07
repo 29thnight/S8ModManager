@@ -7,3 +7,7 @@
 [submodule "third_party/ownership_cpp"]
 	path = third_party/ownership_cpp
 	url = https://github.com/29thnight/ownership_cpp.git
+[submodule "third_party/luajit"]
+	path = third_party/luajit
+	url = https://github.com/LuaJIT/LuaJIT.git
+	branch = v2.1
