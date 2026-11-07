@@ -175,6 +175,13 @@ namespace s8::scripting {
     return state;
   }
 
+  std::optional<std::string> failed_dependency(const ModManifest &mod, const std::vector<std::string> &failed) {
+    for (const auto &dependency : mod.dependencies)
+      if (std::ranges::find(failed, dependency.id) != failed.end())
+        return dependency.id;
+    return std::nullopt;
+  }
+
   ModState merge_mod_state(ModState state, const std::vector<ModManifest> &found) {
     std::vector<std::string> added;
     for (const auto &manifest : found)

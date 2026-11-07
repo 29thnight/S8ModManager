@@ -71,6 +71,8 @@ namespace s8::scripting {
   ModState merge_mod_state(ModState state, const std::vector<ModManifest> &found);
   // Every found mod switched off: used when mods.json does not parse.
   ModState blocked_mod_state(const std::vector<ModManifest> &found);
+  // The first dependency of mod listed in failed, if any.
+  std::optional<std::string> failed_dependency(const ModManifest &mod, const std::vector<std::string> &failed);
 
   // One mod id is applied at most once: the higher version wins, and on a tie
   // JIT wins so a live-coded build replaces the shipped AOT build. Then disabled

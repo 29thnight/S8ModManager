@@ -118,6 +118,11 @@ void mod_state_and_order() {
                                late);
   assert((ids(dependent) == std::vector<std::string>{"core", "user"}));
 
+  // A dependency that failed to load at run time stops the dependent too.
+  const auto user = needing("user", "core", {1, 0, 0}, L"u");
+  assert(failed_dependency(user, {"core"}) == "core");
+  assert(!failed_dependency(user, {"other"}) && !failed_dependency(user, {}));
+
   // Missing, disabled or too old dependencies skip the dependent, and that cascades.
   ModState core_off{{{"core", false}}};
   auto cascade = select_mods({manifest("core", {1, 0, 0}, ModRuntime::Jit, L"c"), needing("user", "core", {1, 0, 0}, L"u"),

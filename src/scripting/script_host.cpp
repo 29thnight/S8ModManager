@@ -467,6 +467,9 @@ namespace {
     }
 
     std::vector<LoadedMod> ordered;
+    // Dependencies come first in the selection, so a failure here reaches every
+    // dependent below it, and through them their own dependents.
+    std::vector<std::string> failed;
     for (auto &manifest : selection.active) {
       ModListing listing{manifest, true};
       const auto kept = std::ranges::find_if(host.mods, [&](const LoadedMod &mod) { return same_mod(mod.manifest, manifest); });
@@ -475,11 +478,17 @@ namespace {
         kept->manifest = manifest;
         ordered.push_back(std::move(*kept));
         host.mods.erase(kept);
+      } else if (const auto dependency = failed_dependency(manifest, failed)) {
+        failed.push_back(manifest.id);
+        listing.state = L"failed";
+        listing.reason = L"의존 모드 " + widen_id(*dependency) + L"를 불러오지 못해 건너뜁니다.";
+        log(manifest.directory.wstring() + L": " + listing.reason);
       } else {
         LoadedMod mod{manifest};
         if (mod.manifest.runtime == ModRuntime::Aot ? load_aot(mod) : load_jit(mod)) {
           ordered.push_back(std::move(mod));
         } else {
+          failed.push_back(manifest.id);
           log(manifest.directory.wstring() + L": 모드를 불러오지 못했습니다.");
           listing.state = L"failed";
           listing.reason = L"모드를 불러오지 못했습니다.";
