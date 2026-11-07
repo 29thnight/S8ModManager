@@ -491,7 +491,8 @@ public sealed class TraitEditorModule : IDisposable
         {
             path = Path.Combine(context.ModDirectory, "san8r_traits_config.json");
             baseline = File.Exists(path) ? File.ReadAllText(path) : null;
-            string initial = baseline ?? File.ReadAllText(TraitEditorModule.DefaultTraitsPath(context));
+            string defaults = TraitEditorModule.DefaultTraitsPath(context);
+            string initial = baseline ?? (File.Exists(defaults) ? File.ReadAllText(defaults) : "{\"traits\":[]}");
 
             root = JsonNode.Parse(initial)!.AsObject();
 
@@ -505,10 +506,14 @@ public sealed class TraitEditorModule : IDisposable
                 return "기재 파일이 외부에서 변경되었습니다. 편집기를 다시 열어 주십시오.";
 
             var next = root.DeepClone().AsObject();
-            var row = next["traits"]!.AsArray().FirstOrDefault(n => n?["id"]?.GetValue<int>() == draft.Source.Id);
+            var traits = next["traits"]!.AsArray();
+            var row = traits.FirstOrDefault(n => n?["id"]?.GetValue<int>() == draft.Source.Id);
 
             if (row == null)
-                return "저장 파일에 해당 기재 레코드가 없습니다.";
+            {
+                row = new JsonObject { ["index"] = draft.Source.Id - 1, ["id"] = (int)draft.Source.Id };
+                traits.Add(row);
+            }
 
             row["effects"] = new JsonArray(draft.Effects.Select(e => (JsonNode)new JsonObject { ["type"] = e.Id, ["value"] = e.Value, ["param"] = e.Parameter }).ToArray());
             var metadata = next["customNames"] as JsonObject ?? new JsonObject();
