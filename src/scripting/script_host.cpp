@@ -25,9 +25,13 @@ namespace s8::scripting {
 namespace {
   using namespace s8::scripting;
   thread_local const EngineApi *current = nullptr;
+  // The mod whose load or event callback is running, so a call can be checked
+  // against the mod that made it.
+  thread_local const std::string *calling_mod = nullptr;
 
   bool save_state(const std::filesystem::path &path, const ModState &state);
   std::int64_t read_mod_list(void *data, std::uint32_t bytes);
+  void log(const std::wstring &message);
   std::int64_t set_mod_enabled(std::int64_t argument, const void *data, std::uint32_t bytes);
 
   std::int64_t invoke(Operation operation, std::uint64_t target, std::int64_t argument, void *data,
@@ -44,6 +48,10 @@ namespace {
       return read_mod_list(data, bytes);
     if (operation == Operation::SetModEnabled)
       return set_mod_enabled(argument, data, bytes);
+    if (operation == Operation::SetOptionsTab && (!calling_mod || !may_set_options_tab(*calling_mod))) {
+      log(L"모드 관리가 아닌 모드의 환경설정 탭 등록을 거부했습니다.");
+      return -1;
+    }
 
     if ((operation >= Operation::GetPersonality && operation <= Operation::WriteMemory) ||
         operation == Operation::GetGemCategory) {
@@ -485,7 +493,10 @@ namespace {
         log(manifest.directory.wstring() + L": " + listing.reason);
       } else {
         LoadedMod mod{manifest};
-        if (mod.manifest.runtime == ModRuntime::Aot ? load_aot(mod) : load_jit(mod)) {
+        const auto *caller = std::exchange(calling_mod, &mod.manifest.id);
+        const bool loaded = mod.manifest.runtime == ModRuntime::Aot ? load_aot(mod) : load_jit(mod);
+        calling_mod = caller;
+        if (loaded) {
           ordered.push_back(std::move(mod));
         } else {
           failed.push_back(manifest.id);
@@ -576,8 +587,10 @@ extern "C" __declspec(dllexport) int S8ScriptDispatch(const s8::scripting::Engin
   for (const auto &mod : host.mods) {
     if (!mod.active)
       continue;
+    const auto *caller = std::exchange(calling_mod, &mod.manifest.id);
     const int status = mod.aot ? mod.aot(&facade, static_cast<int>(event), page, action)
                                : host.managed_dispatch(&facade, mod.handle, static_cast<int>(event), page, action);
+    calling_mod = caller;
     if (result == 0)
       result = status;
     configured |= status == 0;

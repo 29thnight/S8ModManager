@@ -71,6 +71,9 @@ namespace s8::scripting {
   ModState merge_mod_state(ModState state, const std::vector<ModManifest> &found);
   // Every found mod switched off: used when mods.json does not parse.
   ModState blocked_mod_state(const std::vector<ModManifest> &found);
+  // The options tab (환경설정) lists and toggles mods, so only the manager mod may
+  // register it; another mod's tab would replace it and lock the user out.
+  bool may_set_options_tab(std::string_view mod_id);
   // The first dependency of mod listed in failed, if any.
   std::optional<std::string> failed_dependency(const ModManifest &mod, const std::vector<std::string> &failed);
 

@@ -175,6 +175,10 @@ namespace s8::scripting {
     return state;
   }
 
+  bool may_set_options_tab(std::string_view mod_id) {
+    return mod_id == "s8.manager";
+  }
+
   std::optional<std::string> failed_dependency(const ModManifest &mod, const std::vector<std::string> &failed) {
     for (const auto &dependency : mod.dependencies)
       if (std::ranges::find(failed, dependency.id) != failed.end())
