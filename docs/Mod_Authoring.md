@@ -23,7 +23,7 @@
 <게임 폴더>\scripts\mods\my.gold\
   mod.json
   main.lua
-  S8.LuaHost.dll, S8.LuaHost.deps.json   ← 저장소 빌드의 out\x64\<구성>\scripts\mods\s8.lua-sample\ 에서 복사
+  S8.LuaHost.dll, S8.LuaHost.deps.json   ← 저장소 빌드의 out\x64\<구성>\lua\ 에서 복사
   lua51.dll                             ← 같은 곳에서 복사(LuaJIT)
 ```
 
@@ -56,15 +56,19 @@ events.on("month_changed", function(date)
   log(date.year .. "년 " .. date.month .. "월")
 end)
 
--- 기재 254번을 가진 무장의 부대는 턴이 끝날 때 병력 100을 회복한다.
-battle.on_turn_end(254, function(trait)
-  if trait.unit:restore_soldiers(100) > 0 then
-    trait:show("물러서지 마라!")
-  end
-end)
+-- 기재 효과. 어느 기재의 어느 칸에 얼마의 값으로 넣을지는 게임 안 기재 편집기에서 고른다.
+effect "부상병 회복" {
+  description = "턴이 끝날 때 부상병의 {value}%를 회복한다, 단 최대 3000",
+
+  turn_end = function(unit, value)
+    if unit:heal(unit.wounded * value / 100, 3000) > 0 then
+      return "부상병을 치료하라!"
+    end
+  end,
+}
 ```
 
-`main.lua` 는 모드가 불릴 때 한 번 돌고, 그 안에서 등록한 함수가 사건마다 불립니다. 저장소의 `src\scripting\lua\sample\` 이 그대로 도는 예제입니다.
+`main.lua` 는 모드가 불릴 때 한 번 돌고, 그 안에서 등록한 함수가 사건마다 불립니다. 저장소의 `samples\lua-effect\` 가 그대로 도는 예제입니다. 빌드는 이 예제를 게임 폴더에 넣지 않으므로, 써 보려면 위 폴더 구성대로 직접 복사하십시오.
 
 ### 쓸 수 있는 것
 
@@ -75,16 +79,36 @@ end)
 | `game.officer(번호)`, `game.city(번호)` | 번호로 무장·도시 얻기. 없으면 오류 |
 | `events.on("month_changed", 함수)` | 달이 바뀐 뒤. 인자: `year`, `month`, `previous_year`, `previous_month` |
 | `events.on("council_entered", 함수)` | 평정에 들어간 뒤. 인자: `year`, `month` |
-| `battle.on_turn_start(기재, 함수)` | 전투 턴 시작에 그 기재(1~254)를 가진 무장의 부대마다 |
-| `battle.on_unit_action_end(기재, 함수)` | 부대 행동이 끝났을 때 |
-| `battle.on_turn_end(기재, 함수)` | 전체 행동이 끝났을 때 |
+| `effect "이름" { ... }` | 기재 효과 정의. 아래 "기재 효과" 참고 |
 | `log(글)` | 모드 폴더의 `lua.log` 에 한 줄 |
 
 **무장 값**(읽고 쓰기): `leadership`, `strength`, `intelligence`, `politics`, `charm`, `gold`, `action_points`, `civil_fame`, `martial_fame`, `infamy`. 읽기만: `id`.
 
 **도시 값**(읽고 쓰기): `gold`, `grain`, `troops`, `development`, `commerce`, `defense`, `technology`, `revolt`, `development_limit`, `commerce_limit`, `defense_limit`, `troop_limit`. 읽기만: `id`, `name`, `technology_limit`.
 
-**전투 함수의 인자 `trait`**: `trait.id`(기재 번호), `trait:show(대사)`(기재 발동 연출), `trait.unit.soldiers`, `trait.unit.capacity`, `trait.unit:restore_soldiers(양)`(실제로 회복한 양을 돌려줌). 이 값은 그 함수가 도는 동안에만 쓸 수 있습니다.
+### 기재 효과
+
+효과는 기재가 아니라 **기재 칸에 넣는 부품**입니다. 모드는 효과를 한 번 정의하고, 플레이어가 게임 안 기재 편집기에서 어느 기재의 어느 칸에 얼마의 값으로 넣을지 고릅니다. 한 효과를 여러 기재에 다른 값으로 넣을 수 있습니다.
+
+| 칸 | 뜻 |
+|---|---|
+| `description` | 기재 설명에 붙는 글. `{value}` 는 칸의 값으로 바뀝니다 |
+| `turn_start` | 전투 턴이 시작될 때, 그 효과를 가진 무장의 부대마다 |
+| `unit_action_end` | 부대 행동이 끝났을 때 |
+| `turn_end` | 전체 행동이 끝났을 때 |
+| `id` | 생략 가능. 아래 주의 참고 |
+
+시점 함수는 셋 중 하나 이상 있어야 합니다. 함수는 `(unit, value, e)` 를 받고, **글을 돌려주면 그 부대의 대사로 뜹니다.**
+
+- `unit.soldiers`, `unit.capacity`: 지금 병력과 최대 병력
+- `unit.wounded`: 최대 병력에서 지금 병력을 뺀 수. 전멸한 부대는 0
+- `unit:heal(양[, 상한])`: 소수점을 버리고 상한을 적용해 회복하고, 실제로 회복한 양을 돌려줌
+- `value`: 이 기재 칸에 넣은 값
+- `e.id`: 효과를 발동한 기재 번호
+
+이 값들은 그 함수가 도는 동안에만 쓸 수 있습니다.
+
+**주의: 효과는 기본으로 "모드 폴더 이름/효과 이름" 으로 저장됩니다.** 효과 이름을 바꾸면 이미 기재 칸에 넣어 둔 연결이 끊깁니다. 이름을 바꿀 수 있게 하려면 처음부터 `id = "내모드.부상병회복"` 처럼 고정하십시오.
 
 ### 규칙
 
@@ -334,7 +358,7 @@ AOT 판은 .NET 런타임 없이 네이티브 DLL로 불립니다. JIT 판과 �
 
 | 보고 싶은 것 | 파일 |
 |---|---|
-| Lua 예제 모드 | `src\scripting\lua\sample\main.lua` |
+| Lua 예제 모드 | `samples\lua-effect\main.lua` |
 | Lua 연결 층 | `src\scripting\managed\S8.LuaHost\LuaMod.cs`, `Prelude.cs` |
 | 가장 작은 C# 모드(환경설정 탭, 모드 목록) | `src\scripting\managed\S8.ManagerMod\ManagerMod.cs` |
 | 메뉴·창 행·끄기 처리, 전투 효과 등록 | `src\scripting\managed\S8.GameScripts\ModApplication.cs` |

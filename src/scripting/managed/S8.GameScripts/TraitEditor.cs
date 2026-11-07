@@ -116,10 +116,11 @@ public sealed class TraitEditorModule : IDisposable
     {
         // Copy the engine values into mod-owned state. Cancel discards this copy.
         source.Bind(source.Id);
+        // The game shows the description with rendered script effect lines appended; edit the text without them.
         draft = new Draft(
             source,
             accepted.TryGetValue(source.Id, out var text) ? text.Name : source.Name,
-            accepted.TryGetValue(source.Id, out text) ? text.Description : source.Description);
+            store.BaseDescription(source.Id, accepted.TryGetValue(source.Id, out text) ? text.Description : source.Description));
 #if S8_EXPERIMENTAL
         draft.ScriptEffects = ScriptedTraits.GetSlots(source.Id);
 
@@ -167,9 +168,13 @@ public sealed class TraitEditorModule : IDisposable
 
             var current = draft!;
 #if S8_EXPERIMENTAL
-            string? error = ScriptedTraits.CheckForExternalChange() ?? store.Save(current);
+            string? scriptText = current.ScriptEffects.Any(slot => slot != null)
+                ? string.Join("\n", current.ScriptEffects.OfType<EffectSlot>().Select(EffectCatalog.Render))
+                : null;
+            string? error = ScriptedTraits.CheckForExternalChange() ?? store.Save(current, scriptText);
 #else
-            string? error = store.Save(current);
+            string? scriptText = null;
+            string? error = store.Save(current, scriptText);
 #endif
 
             error ??= TraitConfiguration.Publish(context);
@@ -183,7 +188,7 @@ public sealed class TraitEditorModule : IDisposable
             ScriptedTraits.Save(current.Source.Id, current.ScriptEffects);
 #endif
             // Publishing the saved configuration above applied effects and voice to the game.
-            accepted[current.Source.Id] = (current.Name, current.Description);
+            accepted[current.Source.Id] = (current.Name, Store.Compose(current.Description, scriptText));
         };
         catalog.Resumed = () =>
         {
@@ -213,7 +218,7 @@ public sealed class TraitEditorModule : IDisposable
         for (int i = 0; i < 6; ++i)
 #if S8_EXPERIMENTAL
             rows.Add(new(i + 2, $"효과 {i + 1}", current.ScriptEffects[i] is { } script
-                ? ScriptedTraits.Effects.FirstOrDefault(effect => effect.Id == script)?.Name ?? script
+                ? $"{EffectCatalog.Find(script.Id)?.Name ?? script.Id}: {EffectCatalog.Render(script)}  [값 {script.Value}]"
                 : Describe(current.Effects[i]), Tab: EffectTab));
 #else
             rows.Add(new(i + 2, $"효과 {i + 1}", Describe(current.Effects[i]), Tab: EffectTab));
@@ -342,7 +347,7 @@ public sealed class TraitEditorModule : IDisposable
     {
         var current = draft!;
         PersonalityEffect working = current.Effects[slot];
-        string? script = current.ScriptEffects[slot];
+        EffectSlot? script = current.ScriptEffects[slot];
 #if S8_EXPERIMENTAL
         var scripts = ScriptedTraits.Effects.ToArray();
 #else
@@ -355,8 +360,35 @@ public sealed class TraitEditorModule : IDisposable
         {
             if (id >= 1000)
             {
-                script = scripts[id - 1000].Id;
+                // A scripted effect takes one value, shown where "{value}" is in its description.
+                var chosen = scripts[id - 1000];
+                var previous = script;
+                var held = new EffectSlot(chosen.Id, script?.Id == chosen.Id ? script.Value.Value : 0);
+                var valueForm = scene.Create("ScriptEffectValue");
+                var valuePad = valueForm.GameObject.AddComponent<NumberInputComponent>();
+
+                script = held;
                 working = default;
+                valuePad.Bind(valueForm);
+                UiRow ValueRow() => new(0, "값", $"{held.Value}  ({EffectCatalog.Render(held)})");
+                valueForm.Clicked = _ =>
+                {
+                    valuePad.Completed = (confirmed, value) =>
+                    {
+                        if (!confirmed)
+                            return;
+                        held = held with { Value = value };
+                        script = held;
+                        valueForm.SetRow(ValueRow());
+                    };
+                    valuePad.Show(held.Value);
+                };
+                valueForm.Closing = (confirmed, _) =>
+                {
+                    if (!confirmed)
+                        script = previous;
+                };
+                valueForm.Show(DialogKind.CompactForm, chosen.Name, [ValueRow()]);
                 return;
             }
 
@@ -368,7 +400,7 @@ public sealed class TraitEditorModule : IDisposable
             }
 
             var before = working;
-            string? beforeScript = script;
+            EffectSlot? beforeScript = script;
 
             script = null;
 
@@ -475,7 +507,7 @@ public sealed class TraitEditorModule : IDisposable
         public PersonalityEffect[] Effects = source.Effects.ToArray();
         public ushort Voice = source.Voice;
         public ushort Grade;
-        public string?[] ScriptEffects = new string?[6];
+        public EffectSlot?[] ScriptEffects = new EffectSlot?[6];
     }
 
     // Mod configuration is not presented as an engine API. The existing catalog
@@ -503,7 +535,18 @@ public sealed class TraitEditorModule : IDisposable
                 throw new InvalidDataException("The trait configuration schema is not supported.");
         }
 
-        public string? Save(Draft draft)
+        // The game reads only "desc", so rendered script effect lines are appended there;
+        // "scriptDesc" remembers them so the editor can show the description without them.
+        public static string Compose(string description, string? scriptText) =>
+            scriptText == null ? description : description + "\n" + scriptText;
+
+        public string BaseDescription(ushort id, string shown) =>
+            root["customNames"]?[(id - 1).ToString()]?["scriptDesc"]?.GetValue<string>() is { } suffix
+                && shown.EndsWith("\n" + suffix, StringComparison.Ordinal)
+                ? shown[..^(suffix.Length + 1)]
+                : shown;
+
+        public string? Save(Draft draft, string? scriptText)
         {
             if ((File.Exists(path) ? File.ReadAllText(path) : null) != baseline)
                 return "기재 파일이 외부에서 변경되었습니다. 편집기를 다시 열어 주십시오.";
@@ -530,7 +573,11 @@ public sealed class TraitEditorModule : IDisposable
                 metadata[(draft.Source.Id - 1).ToString()] = entry;
 
             entry["name"] = draft.Name;
-            entry["desc"] = draft.Description;
+            entry["desc"] = Compose(draft.Description, scriptText);
+            if (scriptText == null)
+                entry.Remove("scriptDesc");
+            else
+                entry["scriptDesc"] = scriptText;
             entry["grade"] = draft.Grade;
             if (voicePath == null)
             {

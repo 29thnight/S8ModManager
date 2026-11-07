@@ -13,7 +13,7 @@ public sealed unsafe class LuaMod : ScriptMod
     private static LuaApi? api;
     private nint state;
     private GCHandle self;
-    private int officerMeta, cityMeta, effectCount;
+    private int officerMeta, cityMeta;
     private ScriptedTraitComponent? currentTrait;
     private string logPath = "";
 
@@ -101,7 +101,7 @@ public sealed unsafe class LuaMod : ScriptMod
         [
             ("set_meta", (nint)(delegate* unmanaged[Cdecl]<nint, int>)&RawSetMeta), ("menu_add", (nint)(delegate* unmanaged[Cdecl]<nint, int>)&RawMenuAdd), ("player", (nint)(delegate* unmanaged[Cdecl]<nint, int>)&RawPlayer),
             ("officer", (nint)(delegate* unmanaged[Cdecl]<nint, int>)&RawOfficer), ("city", (nint)(delegate* unmanaged[Cdecl]<nint, int>)&RawCity), ("get", (nint)(delegate* unmanaged[Cdecl]<nint, int>)&RawGet), ("set", (nint)(delegate* unmanaged[Cdecl]<nint, int>)&RawSet),
-            ("events_on", (nint)(delegate* unmanaged[Cdecl]<nint, int>)&RawEventsOn), ("battle_on", (nint)(delegate* unmanaged[Cdecl]<nint, int>)&RawBattleOn), ("trait_show", (nint)(delegate* unmanaged[Cdecl]<nint, int>)&RawTraitShow),
+            ("events_on", (nint)(delegate* unmanaged[Cdecl]<nint, int>)&RawEventsOn), ("effect_define", (nint)(delegate* unmanaged[Cdecl]<nint, int>)&RawEffectDefine), ("trait_show", (nint)(delegate* unmanaged[Cdecl]<nint, int>)&RawTraitShow),
             ("trait_get", (nint)(delegate* unmanaged[Cdecl]<nint, int>)&RawTraitGet), ("unit_get", (nint)(delegate* unmanaged[Cdecl]<nint, int>)&RawUnitGet), ("unit_restore", (nint)(delegate* unmanaged[Cdecl]<nint, int>)&RawUnitRestore),
             ("log", (nint)(delegate* unmanaged[Cdecl]<nint, int>)&RawLog),
         ];
@@ -323,30 +323,34 @@ public sealed unsafe class LuaMod : ScriptMod
     });
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static int RawBattleOn(nint L) => Guard(L, (mod, l) =>
+    private static int RawEffectDefine(nint L) => Guard(L, (mod, l) =>
     {
-        ushort trait = Whole<ushort>(Number(l, 1, "기재 번호"), "기재 번호");
-        if (trait is < 1 or > 254)
-            throw new ArgumentException($"기재 번호는 1~254입니다 ({trait}).");
-        string moment = String(l, 2, "시점");
-        int function = Function(l, 3);
-        string id = $"lua.{++mod.effectCount}.{moment}";
-        Action<ScriptedTraitComponent> run = component =>
+        string name = String(l, 2, "효과 이름");
+        // Without an explicit id the effect is keyed by mod folder and name, so renaming
+        // it unlinks the trait slots that hold it; `id = "..."` pins it.
+        string id = Api.Type(l, 1) == LuaApi.TypeNil
+            ? Path.GetFileName(Path.TrimEndingDirectorySeparator(mod.Context.ModDirectory)) + "/" + name
+            : String(l, 1, "id");
+        string description = String(l, 3, "description");
+        Action<ScriptedTraitComponent>? Handler(int index)
         {
-            mod.currentTrait = component;
-            try { mod.Invoke(function); }
-            finally { mod.currentTrait = null; }
-        };
-        var definition = new ScriptEffectDefinition(id, $"Lua {moment}", "Lua 스크립트 효과");
-
-        switch (moment)
-        {
-            case "turn_start": mod.Effects.Register(definition, onTurnStart: run); break;
-            case "unit_action_end": mod.Effects.Register(definition, onUnitActionEnd: run); break;
-            case "turn_end": mod.Effects.Register(definition, onTurnEnd: run); break;
-            default: throw new ArgumentException($"알 수 없는 시점: {moment}");
+            if (Api.Type(l, index) == LuaApi.TypeNil)
+                return null;
+            int function = Function(l, index);
+            return component =>
+            {
+                mod.currentTrait = component;
+                try { mod.Invoke(function); }
+                finally { mod.currentTrait = null; }
+            };
         }
-        mod.Effects.Bind(trait, id);
+
+        var start = Handler(4);
+        var action = Handler(5);
+        var end = Handler(6);
+        if (start == null && action == null && end == null)
+            throw new ArgumentException("turn_start, unit_action_end, turn_end 중 하나는 있어야 합니다.");
+        mod.Effects.Register(new ScriptEffectDefinition(id, name, description), start, action, end);
         return 0;
     });
 
@@ -364,9 +368,12 @@ public sealed unsafe class LuaMod : ScriptMod
     private static int RawTraitGet(nint L) => Guard(L, (mod, l) =>
     {
         string key = String(l, 1, "이름");
-        if (key != "id")
-            throw new ArgumentException($"기재에 없는 값: {key} (id, unit, show)");
-        Api.PushNumber(l, mod.Trait.PersonalityId);
+        Api.PushNumber(l, key switch
+        {
+            "id" => mod.Trait.PersonalityId,
+            "value" => mod.Trait.Value,
+            _ => throw new ArgumentException($"효과에 없는 값: {key} (id, value, unit, show)")
+        });
         return 1;
     });
 
@@ -378,7 +385,7 @@ public sealed unsafe class LuaMod : ScriptMod
         {
             "soldiers" => unit.Soldiers,
             "capacity" => unit.Capacity,
-            var other => throw new ArgumentException($"부대에 없는 값: {other} (soldiers, capacity, restore_soldiers)")
+            var other => throw new ArgumentException($"부대에 없는 값: {other} (soldiers, capacity, wounded, heal, restore_soldiers)")
         });
         return 1;
     });

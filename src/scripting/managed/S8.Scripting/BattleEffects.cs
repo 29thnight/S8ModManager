@@ -1,14 +1,18 @@
+using System.Runtime.CompilerServices;
+
+[assembly: InternalsVisibleTo("S8.LuaHost")]
+[assembly: InternalsVisibleTo("S8.Scripting.Smoke")]
+
 namespace S8.Scripting;
 
-// Runs registered battle effects. ScriptMod owns one and routes the battle events
-// to it, so registering an effect and binding it to a trait is all a mod writes.
-// The host attaches each effect once per (officer, trait, effect), applies an
-// effect at most once per unit per event, and detaches effects whose trait left.
+// Runs this mod's scripted effects. An effect is defined once (name, description,
+// what it does at each battle moment) and published to EffectCatalog; which traits
+// hold it, and with what value, comes from the trait slots the editor supplies.
+// Authoring is open to Lua only, so Register and Bind stay internal.
 public sealed class BattleEffects : IDisposable
 {
-    private readonly Dictionary<ushort, List<string>> fixedBindings = [];
-    private readonly Dictionary<(ushort Officer, ushort Personality, string Effect), ScriptedTraitComponent> attached = [];
-    private Func<ushort, IReadOnlyList<string?>?>? bindingSource;
+    private readonly Dictionary<ushort, List<EffectSlot>> fixedBindings = [];
+    private readonly Dictionary<(ushort Officer, ushort Personality, string Effect, int Value), ScriptedTraitComponent> attached = [];
     private BattleWorld? battle;
 
     internal BattleEffects(GameWorld world)
@@ -24,44 +28,41 @@ public sealed class BattleEffects : IDisposable
     // The current battle, available while an effect runs.
     public BattleWorld Battle => battle ??= new BattleWorld(World);
 
-    public IEnumerable<ScriptEffectDefinition> Definitions => Registry.Definitions;
-
-    public void Register<T>(ScriptEffectDefinition definition)
-        where T : ScriptedTraitComponent, new() => Registry.Register<T>(definition);
-
-    public void Register(ScriptEffectDefinition definition,
+    internal void Register(ScriptEffectDefinition definition,
         Action<ScriptedTraitComponent>? onTurnStart = null,
         Action<ScriptedTraitComponent>? onUnitActionEnd = null,
-        Action<ScriptedTraitComponent>? onTurnEnd = null) =>
+        Action<ScriptedTraitComponent>? onTurnEnd = null)
+    {
+        if (Registry.Contains(definition.Id))
+            throw new ArgumentException($"효과 {definition.Id} 를 이미 정의했습니다.");
+        EffectCatalog.Define(this, definition);
         Registry.Register(definition, onTurnStart, onUnitActionEnd, onTurnEnd);
+    }
 
-    // An officer holding this trait (personality ID 1..254) runs the effect.
-    public void Bind(ushort personalityId, string effectId)
+    // Without an editor: an officer holding this trait (1..254) runs the effect.
+    internal void Bind(ushort personalityId, string effectId, int value = 0)
     {
         if (!Registry.Contains(effectId))
             throw new ArgumentException($"Effect {effectId} is not registered.", nameof(effectId));
 
-        if (!fixedBindings.TryGetValue(personalityId, out var effects))
-            fixedBindings.Add(personalityId, effects = []);
+        if (!fixedBindings.TryGetValue(personalityId, out var slots))
+            fixedBindings.Add(personalityId, slots = []);
 
-        if (!effects.Contains(effectId))
-            effects.Add(effectId);
+        var slot = new EffectSlot(effectId, value);
+        if (!slots.Contains(slot))
+            slots.Add(slot);
     }
 
-    // For mods that keep trait-to-effect bindings elsewhere (a file the user edits).
-    // Read on every battle event, so changes apply from the next event.
-    public void UseBindings(Func<ushort, IReadOnlyList<string?>?> source) => bindingSource = source;
-
-    private IEnumerable<string> EffectsOf(ushort personality)
+    private IEnumerable<EffectSlot> EffectsOf(ushort personality)
     {
-        if (fixedBindings.TryGetValue(personality, out var fixedEffects))
-            foreach (string effect in fixedEffects)
-                yield return effect;
+        if (fixedBindings.TryGetValue(personality, out var fixedSlots))
+            foreach (var slot in fixedSlots)
+                yield return slot;
 
-        if (bindingSource?.Invoke(personality) is { } slots)
-            foreach (string? effect in slots)
-                if (effect != null && Registry.Contains(effect))
-                    yield return effect;
+        if (EffectCatalog.SlotsOf(personality) is { } slots)
+            foreach (var slot in slots)
+                if (slot is { } held && Registry.Contains(held.Id))
+                    yield return held;
     }
 
     internal void Dispatch(ScriptEvent kind)
@@ -75,16 +76,16 @@ public sealed class BattleEffects : IDisposable
             foreach (var unitObject in current.EventUnits)
             {
                 var unit = unitObject.GetComponent<BattleUnitComponent>()!;
-                var applied = new HashSet<string>();
+                var applied = new HashSet<EffectSlot>();
 
                 foreach (var officer in unit.Officers)
                     foreach (ushort personality in officer.PersonalityIds)
-                        foreach (string effect in EffectsOf(personality))
+                        foreach (var slot in EffectsOf(personality))
                         {
-                            if (!Registry.Handles(effect, kind) || !applied.Add(effect))
+                            if (!Registry.Handles(slot.Id, kind) || !applied.Add(slot))
                                 continue;
 
-                            Run(attached[(officer.Id, personality, effect)], kind);
+                            Run(attached[(officer.Id, personality, slot.Id, slot.Value)], kind);
                         }
             }
 
@@ -98,19 +99,19 @@ public sealed class BattleEffects : IDisposable
 
     private void Attach()
     {
-        var retained = new HashSet<(ushort Officer, ushort Personality, string Effect)>();
+        var retained = new HashSet<(ushort Officer, ushort Personality, string Effect, int Value)>();
 
         foreach (var owner in World.Officers)
         {
             var officer = owner.GetComponent<OfficerComponent>()!;
 
             foreach (ushort personality in officer.PersonalityIds)
-                foreach (string effect in EffectsOf(personality))
+                foreach (var slot in EffectsOf(personality))
                 {
-                    var key = (officer.Id, personality, effect);
+                    var key = (officer.Id, personality, slot.Id, slot.Value);
 
                     if (retained.Add(key) && !attached.ContainsKey(key))
-                        attached.Add(key, Registry.Attach(effect, owner, personality));
+                        attached.Add(key, Registry.Attach(slot.Id, owner, personality, slot.Value));
                 }
         }
 
@@ -148,6 +149,7 @@ public sealed class BattleEffects : IDisposable
     public void Dispose()
     {
         World.SessionEnded -= OnSessionEnded;
+        EffectCatalog.Withdraw(this);
         battle?.Dispose();
 
         foreach (var component in attached.Values)

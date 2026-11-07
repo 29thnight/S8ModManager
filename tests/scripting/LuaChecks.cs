@@ -64,6 +64,12 @@ internal static unsafe class LuaChecks
         city.grain = 300
         log("grain=" .. city.grain .. " limit_write=" .. tostring((pcall(function() city.technology_limit = 3 end))))
         keep = me
+        effect "Lua 회복" {
+          description = "턴이 끝날 때 {value}% 회복",
+          turn_end = function(unit, value) log("ran " .. value) end,
+        }
+        effect "고정" { id = "lua.pinned", description = "y", turn_start = function() end }
+        log("no_handler=" .. tostring((pcall(function() effect "빈 효과" { description = "y" } end))))
         events.on("month_changed", function(d)
           log("month=" .. d.year .. "/" .. d.month .. " from " .. d.previous_month
             .. " keep=" .. tostring((pcall(function() return keep.gold end))))
@@ -110,6 +116,13 @@ internal static unsafe class LuaChecks
                 "An out-of-range value raises a Lua error at the script line: " + text);
             Check(text.Contains("unknown=false"), "An unknown field is an error, not nil");
             Check(text.Contains("grain=300 limit_write=false"), "City fields write, read-only fields refuse");
+            string healId = Path.GetFileName(directory) + "/Lua 회복";
+            Check(EffectCatalog.Find(healId)?.Name == "Lua 회복"
+                && EffectCatalog.Render(new(healId, 25)) == "턴이 끝날 때 25% 회복",
+                "An effect is keyed by mod folder and name, and its description takes the slot value");
+            Check(EffectCatalog.Find("lua.pinned")?.Name == "고정", "An explicit id pins the effect key");
+            Check(text.Contains("no_handler=false") && EffectCatalog.Find(Path.GetFileName(directory) + "/빈 효과") == null,
+                "An effect without any battle moment is refused");
 
             mod.World.DispatchActivity(ScriptEvent.MonthChanged, 200 | (1 << 16), 200 | (2 << 16));
             Check(File.ReadAllText(log).Contains("month=200/2 from 1 keep=true"), "Lua receives world events with dates");
@@ -120,6 +133,7 @@ internal static unsafe class LuaChecks
             Check(File.ReadAllText(log).Contains("month=200/3 from 2 keep=false"),
                 "An officer kept from an earlier session is refused");
             module.Dispose();
+            Check(EffectCatalog.Find(healId) == null && EffectCatalog.Find("lua.pinned") == null, "Unloading the Lua mod withdraws its effects");
 
             File.WriteAllText(Path.Combine(directory, "main.lua"), "local x = = 1");
             bool rejected = false;

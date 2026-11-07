@@ -1,6 +1,6 @@
 {
-  "id": "s8.lua-sample",
-  "name": "Lua 예제",
+  "id": "s8.lua-effect",
+  "name": "Lua 기재 효과 예제",
   "version": "0.0.1",
   "apiVersion": 21,
   "runtime": "jit",

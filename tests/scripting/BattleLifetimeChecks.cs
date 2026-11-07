@@ -52,18 +52,19 @@ internal static unsafe class BattleLifetimeChecks
     // A mod that only registers and binds; the SDK must run the effect.
     public sealed class EffectMod : ScriptMod
     {
-        public int Runs, ActionRuns;
+        public int Runs, ActionRuns, LastValue;
         public BattleUnitComponent? LastUnit;
 
         protected override void OnLoad()
         {
-            Effects.Register(new("test.heal", "Heal", "Bound by ID"),
-                onTurnEnd: trait => { ++Runs; LastUnit = trait.Unit; trait.Unit.RestoreSoldiers(5); });
-            Effects.Register(new("test.other", "Other", "Not bound"), onUnitActionEnd: _ => ++ActionRuns);
-            Effects.Bind(254, "test.heal");
-            Effects.Bind(254, "test.heal");
+            Effects.Register(new("test.heal", "Heal", "Heal {value}%"),
+                onTurnEnd: trait => { ++Runs; LastValue = trait.Value; LastUnit = trait.Unit; trait.Unit.RestoreSoldiers(5); });
+            Effects.Register(new("test.other", "Other", "Not held"), onUnitActionEnd: _ => ++ActionRuns);
         }
     }
+
+    // Stands in for the trait editor: another owner supplies which traits hold which effect.
+    private static readonly object editor = new();
 
     private static Context current;
     private static Unit[] roster = [];
@@ -340,12 +341,23 @@ internal static unsafe class BattleLifetimeChecks
             try { mod.Effects.Bind(254, "missing"); }
             catch (ArgumentException) { unknownRejected = true; }
             Check(unknownRejected, "Binding an unregistered effect fails at registration");
+            Check(EffectCatalog.Find("test.heal")?.Name == "Heal"
+                && EffectCatalog.Render(new("test.heal", 40)) == "Heal 40%",
+                "A defined effect is listed for every mod and renders its value");
+            bool duplicateRejected = false;
+            try { new BattleEffects(mod.World).Register(new("test.heal", "Again", ""), onTurnEnd: _ => { }); }
+            catch (ArgumentException) { duplicateRejected = true; }
+            Check(duplicateRejected, "Another owner cannot redefine an effect ID");
 
+            // Two slots of trait 254 hold the same effect and value, one holds an effect nobody defines.
+            EffectCatalog.UseBindings(editor, personality => personality == 254
+                ? [new EffectSlot("test.heal", 40), new EffectSlot("test.heal", 40), new EffectSlot("gone", 1), null]
+                : null);
             current = new() { WorldSession = 7, Session = 9, Sequence = 1, Kind = ScriptEvent.BattleTurnEnded };
             roster = [Record(11, 701, 565, 80)];
             module.Dispatch(ScriptEvent.BattleTurnEnded, 0, 0);
-            Check(mod.Runs == 1 && mod.LastUnit?.Id == 11 && roster[0].Soldiers == 85,
-                "A registered and bound effect runs once from the SDK without mod routing code");
+            Check(mod.Runs == 1 && mod.LastValue == 40 && mod.LastUnit?.Id == 11 && roster[0].Soldiers == 85,
+                "An effect held by a trait slot runs once with the slot's value");
             Check(mod.LastUnit is { IsCurrent: false }, "The SDK ends the battle event scope after effects run");
 
             current = current with { Sequence = 2, ActingUnit = 11, Kind = ScriptEvent.BattleUnitActionEnded };
@@ -357,6 +369,9 @@ internal static unsafe class BattleLifetimeChecks
             Check(holder.GetComponent<BattleMembershipComponent>() == null, "Battle end releases memberships");
             module.Dispose();
             Check(holder.GetComponent<ScriptedTraitComponent>() == null, "Unloading the mod detaches its effects");
+            Check(EffectCatalog.Find("test.heal") == null && EffectCatalog.Render(new("test.heal", 40)).Contains("없는 효과"),
+                "Unloading withdraws the mod's effects from the shared list");
+            EffectCatalog.Withdraw(editor);
         }
         finally
         {

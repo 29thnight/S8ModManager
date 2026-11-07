@@ -91,6 +91,9 @@ public abstract class ScriptedTraitComponent : Component, IBattleEffect
 {
     public ushort PersonalityId { get; internal set; }
 
+    // The value the trait's slot gives this effect ("{value}" in its description).
+    public int Value { get; internal set; }
+
     // The battle unit of the officer holding this trait.
     public BattleUnitComponent Unit => GameObject.GetComponent<BattleMembershipComponent>()!.Unit;
 
@@ -132,7 +135,7 @@ public sealed class ScriptEffectRegistry
 {
     private readonly Dictionary<string, (
         ScriptEffectDefinition Definition,
-        Func<GameObject, ushort, ScriptedTraitComponent> Attach,
+        Func<GameObject, ushort, int, ScriptedTraitComponent> Attach,
         uint Events)> effects = [];
 
     public IEnumerable<ScriptEffectDefinition> Definitions => effects.Values.Select(effect => effect.Definition);
@@ -152,7 +155,11 @@ public sealed class ScriptEffectRegistry
             events |= 1U << (int)ScriptEvent.BattleTurnEnded;
 
         effects.Add(definition.Id, (definition,
-            (gameObject, personality) => gameObject.AddComponent<T>(component => component.PersonalityId = personality), events));
+            (gameObject, personality, value) => gameObject.AddComponent<T>(component =>
+            {
+                component.PersonalityId = personality;
+                component.Value = value;
+            }), events));
     }
 
     // The same as Register<T> without writing a class: pass only the moments the effect
@@ -174,9 +181,10 @@ public sealed class ScriptEffectRegistry
             events |= 1U << (int)ScriptEvent.BattleTurnEnded;
 
         effects.Add(definition.Id, (definition,
-            (gameObject, personality) => gameObject.AddComponent<CallbackEffect>(component =>
+            (gameObject, personality, value) => gameObject.AddComponent<CallbackEffect>(component =>
             {
                 component.PersonalityId = personality;
+                component.Value = value;
                 component.TurnStart = onTurnStart;
                 component.UnitActionEnd = onUnitActionEnd;
                 component.TurnEnd = onTurnEnd;
@@ -195,8 +203,8 @@ public sealed class ScriptEffectRegistry
         public void OnBattleTurnEnded() => TurnEnd?.Invoke(this);
     }
 
-    public ScriptedTraitComponent Attach(string id, GameObject owner, ushort personality) =>
-        effects[id].Attach(owner, personality);
+    public ScriptedTraitComponent Attach(string id, GameObject owner, ushort personality, int value = 0) =>
+        effects[id].Attach(owner, personality, value);
 
     public bool Contains(string id) => effects.ContainsKey(id);
 

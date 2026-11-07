@@ -14,16 +14,15 @@
     <LuaJitSource>$(MSBuildThisFileDirectory)..\..\..\third_party\luajit\</LuaJitSource>
     <OutDir>$(MSBuildThisFileDirectory)..\..\..\out\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(MSBuildThisFileDirectory)..\..\..\out\obj\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
-    <LuaSampleModDir>$(OutDir)scripts\mods\s8.lua-sample\</LuaSampleModDir>
-    <NMakeBuildCommandLine>call "$(MSBuildThisFileDirectory)build_luajit.cmd" "$(LuaJitSource)" "$(IntDir)" "$(LuaSampleModDir)" $(Configuration)</NMakeBuildCommandLine>
+    <!-- Outside scripts\: the runtime a Lua mod copies, never loaded as a mod itself. -->
+    <LuaRuntimeDir>$(OutDir)lua\</LuaRuntimeDir>
+    <NMakeBuildCommandLine>call "$(MSBuildThisFileDirectory)build_luajit.cmd" "$(LuaJitSource)" "$(IntDir)" "$(LuaRuntimeDir)" $(Configuration)</NMakeBuildCommandLine>
     <NMakeReBuildCommandLine>rmdir /s /q "$(IntDir)src" 2&gt;nul &amp; $(NMakeBuildCommandLine)</NMakeReBuildCommandLine>
     <NMakeCleanCommandLine>rmdir /s /q "$(IntDir)src" "$(IntDir)dynasm" 2&gt;nul &amp; exit /b 0</NMakeCleanCommandLine>
     <NMakeOutput>$(IntDir)src\lua51.dll</NMakeOutput>
   </PropertyGroup>
   <ItemGroup>
     <None Include="build_luajit.cmd" />
-    <None Include="sample\mod.json" />
-    <None Include="sample\main.lua" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

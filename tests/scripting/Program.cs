@@ -86,7 +86,7 @@ unsafe class Program
         checks += TraitConfigurationChecks.Run();
         checks += WorldSaveChecks.Run();
         string output = Path.GetFullPath(args[0]);
-        checks += LuaChecks.Run(Path.Combine(output, "scripts", "mods", "s8.lua-sample", "lua51.dll"));
+        checks += LuaChecks.Run(Path.Combine(output, "lua", "lua51.dll"));
         nint dll = NativeLibrary.Load(Path.Combine(output, "xinput1_4.dll"));
 
         dispatch = (delegate* unmanaged[Cdecl]<NativeApi*, int, int, int, int> )NativeLibrary.GetExport(dll, "S8ScriptDispatch");
