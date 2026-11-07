@@ -49,6 +49,22 @@ internal static unsafe class BattleLifetimeChecks
         public void OnBattleTurnEnded() => ++Calls;
     }
 
+    // A mod that only registers and binds; the SDK must run the effect.
+    public sealed class EffectMod : ScriptMod
+    {
+        public int Runs, ActionRuns;
+        public BattleUnitComponent? LastUnit;
+
+        protected override void OnLoad()
+        {
+            Effects.Register(new("test.heal", "Heal", "Bound by ID"),
+                onTurnEnd: trait => { ++Runs; LastUnit = trait.Unit; trait.Unit.RestoreSoldiers(5); });
+            Effects.Register(new("test.other", "Other", "Not bound"), onUnitActionEnd: _ => ++ActionRuns);
+            Effects.Bind(254, "test.heal");
+            Effects.Bind(254, "test.heal");
+        }
+    }
+
     private static Context current;
     private static Unit[] roster = [];
     private static ulong lastToken;
@@ -315,6 +331,32 @@ internal static unsafe class BattleLifetimeChecks
             world.Dispose();
             world.Dispose();
             Check(final.Disables == 1 && world.SessionId == 0, "Session disposal is idempotent");
+
+            var mod = new EffectMod();
+            IScriptModule module = mod;
+            current = new() { WorldSession = 7 };
+            module.Initialize(new ModContext("fixture", Path.GetFullPath("resources")));
+            bool unknownRejected = false;
+            try { mod.Effects.Bind(254, "missing"); }
+            catch (ArgumentException) { unknownRejected = true; }
+            Check(unknownRejected, "Binding an unregistered effect fails at registration");
+
+            current = new() { WorldSession = 7, Session = 9, Sequence = 1, Kind = ScriptEvent.BattleTurnEnded };
+            roster = [Record(11, 701, 565, 80)];
+            module.Dispatch(ScriptEvent.BattleTurnEnded, 0, 0);
+            Check(mod.Runs == 1 && mod.LastUnit?.Id == 11 && roster[0].Soldiers == 85,
+                "A registered and bound effect runs once from the SDK without mod routing code");
+            Check(mod.LastUnit is { IsCurrent: false }, "The SDK ends the battle event scope after effects run");
+
+            current = current with { Sequence = 2, ActingUnit = 11, Kind = ScriptEvent.BattleUnitActionEnded };
+            module.Dispatch(ScriptEvent.BattleUnitActionEnded, 0, 0);
+            Check(mod.Runs == 1 && mod.ActionRuns == 0, "Only bound effects handling the event run");
+
+            module.Dispatch(ScriptEvent.BattleSessionEnded, 0, 0);
+            var holder = mod.World.FindOfficer(565)!;
+            Check(holder.GetComponent<BattleMembershipComponent>() == null, "Battle end releases memberships");
+            module.Dispose();
+            Check(holder.GetComponent<ScriptedTraitComponent>() == null, "Unloading the mod detaches its effects");
         }
         finally
         {

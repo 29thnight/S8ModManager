@@ -123,7 +123,7 @@ public sealed class HelloMod : ScriptMod
 - `Component.OnEnable` / `OnDisable`: 컴포넌트를 붙일 때와 떼거나 객체를 버릴 때.
 - `GameSetup.Configure`: 모드 어셈블리 안의 이 형식을 반사로 찾아 `OnLoad` 다음에 한 번 부릅니다(`Order` 순). `Dispose` 는 모드가 내려갈 때.
 - `WorldSetup.Configure`: 같은 방식으로 찾되, **게임 세션이 시작될 때마다** 새로 만들어 부릅니다(`SessionStarted` 직전). `Dispose` 는 세션이 끝날 때.
-- 전투 효과(람다 등록이든 `IBattleTurnStartEffect` 등 인터페이스든)는 `ScriptMod` 가 자동으로 부르지 않습니다. 모드가 `OnEvent` 에서 받아 직접 배분합니다(`S8.GameScripts` 의 `ScriptedTraitCatalog` 참고).
+- 전투 효과는 `Effects` 에 등록하고 기재에 묶으면 `ScriptMod` 가 전투 사건마다 부릅니다. 효과는 (무장, 기재, 효과)마다 한 번 붙고, 한 사건에서 부대마다 한 번만 돌며, 기재를 잃으면 떨어지고, 모드가 내려가면 모두 정리됩니다. 원래 사건은 그 뒤에 `OnEvent` 로도 갑니다.
 
 없는 것: 매 프레임 갱신, 세이브 저장·불러오기 직전 알림, 게임 종료 알림은 없습니다. 세션 시작·끝도 게임이 바로 알려 주는 사건이 아니라, **다음 사건이 왔을 때** 세션 값을 다시 읽고 바뀐 것을 알아채는 방식입니다.
 
@@ -208,15 +208,16 @@ protected override void OnLoad()
 전투 효과도 클래스 없이 등록합니다. 필요한 시점만 넘기면 됩니다.
 
 ```csharp
-effects.Register(new("my.heal", "턴 종료 회복", "부대 병력을 회복합니다."),
+Effects.Register(new("my.heal", "턴 종료 회복", "부대 병력을 회복합니다."),
     onTurnEnd: trait =>
     {
         trait.Show("치료하라!");             // 기재 발동 연출
         trait.Unit.RestoreSoldiers(100);    // 그 기재를 가진 무장의 부대
     });
+Effects.Bind(200, "my.heal");               // 기재 200번을 가진 무장에게 적용. 연결 코드는 필요 없음
 ```
 
-`onTurnStart`(턴 시작), `onUnitActionEnd`(부대 행동 끝), `onTurnEnd`(전체 행동 끝) 중 쓰는 것만 넘깁니다.
+`onTurnStart`(턴 시작), `onUnitActionEnd`(부대 행동 끝), `onTurnEnd`(전체 행동 끝) 중 쓰는 것만 넘깁니다. 등록하지 않은 효과를 묶으면 그 자리에서 `ArgumentException` 이 납니다. 사용자가 고치는 파일에서 묶음을 읽는 모드는 `Effects.UseBindings(기재번호 => 효과목록)` 을 씁니다(`S8.GameScripts` 의 `ScriptedTraitCatalog` 참고).
 
 처리기 인터페이스(`IMonthChangedHandler`, `IBattleTurnEndEffect` 등)는 같은 일을 무장·도시 컴포넌트 안에서 하는 고급 방법입니다. 무장마다 상태를 오래 붙여 두려는 경우가 아니면 람다로 충분합니다.
 

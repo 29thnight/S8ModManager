@@ -4,34 +4,29 @@ using S8.Scripting;
 
 namespace S8.GameScripts;
 
-public sealed class ScriptedTraitCatalog : IDisposable
+public sealed class ScriptedTraitCatalog
 {
     public const string RecoveryEffect = "s8.battle.wounded-recovery";
 
     private readonly ModContext context;
     private readonly string directory;
     private readonly string bindingsPath;
-    private readonly ScriptEffectRegistry registry;
+    private readonly BattleEffects effects;
     private readonly Dictionary<ushort, string?[]> bindings = [];
-    private readonly Dictionary<(ushort Officer, ushort Personality, string Effect), ScriptedTraitComponent> components = [];
     private string? baseline;
 
-    public BattleWorld Battle { get; }
-
-    public GameWorld World => Battle.World;
-
-    public ScriptedTraitCatalog(ModContext context, ScriptEffectRegistry effects, GameWorld world)
+    // The SDK runs the effects; this catalog only supplies the user-edited bindings.
+    public ScriptedTraitCatalog(ModContext context, BattleEffects effects)
     {
-        Battle = new BattleWorld(world);
-        world.SessionEnded += OnSessionEnded;
         this.context = context;
         directory = context.ModDirectory;
         bindingsPath = Path.Combine(directory, "san8r_script_traits.json");
-        registry = effects;
+        this.effects = effects;
         Reload();
+        effects.UseBindings(personality => bindings.GetValueOrDefault(personality));
     }
 
-    public IEnumerable<ScriptEffectDefinition> Effects => registry.Definitions;
+    public IEnumerable<ScriptEffectDefinition> Effects => effects.Definitions;
 
     public string?[] GetSlots(ushort personality) => bindings.TryGetValue(personality, out var slots)
         ? (string?[])slots.Clone()
@@ -184,104 +179,5 @@ public sealed class ScriptedTraitCatalog : IDisposable
 
         File.WriteAllText(temporary, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         File.Move(temporary, path, true);
-    }
-
-    public void DispatchBattleEvent(ScriptEvent kind)
-    {
-        try
-        {
-            Battle.Refresh();
-
-            var retained = new HashSet<(ushort Officer, ushort Personality, string Effect)>();
-
-            foreach (var owner in World.Officers)
-            {
-                var officer = owner.GetComponent<OfficerComponent>()!;
-
-                foreach (ushort personality in officer.PersonalityIds)
-                {
-                    if (!bindings.TryGetValue(personality, out var slots))
-                        continue;
-
-                    foreach (string? effect in slots)
-                    {
-                        if (effect == null || !registry.Contains(effect))
-                            continue;
-
-                        var key = (officer.Id, personality, effect);
-
-                        if (retained.Add(key) && !components.ContainsKey(key))
-                            components.Add(key, registry.Attach(effect, owner, personality));
-                    }
-                }
-            }
-
-            foreach (var key in components.Keys.Where(key => !retained.Contains(key)).ToArray())
-            {
-                var component = components[key];
-
-                component.GameObject.RemoveComponent(component);
-                components.Remove(key);
-            }
-
-            foreach (var unitObject in Battle.EventUnits)
-            {
-                var unit = unitObject.GetComponent<BattleUnitComponent>()!;
-                var applied = new HashSet<string>();
-
-                foreach (var officer in unit.Officers)
-                {
-                    foreach (ushort personality in officer.PersonalityIds)
-                    {
-                        if (!bindings.TryGetValue(personality, out var slots))
-                            continue;
-
-                        foreach (string? effect in slots)
-                        {
-                            if (effect == null || !registry.Handles(effect, kind) || !applied.Add(effect))
-                                continue;
-
-                            var component = components[(officer.Id, personality, effect)];
-
-                            switch (kind)
-                            {
-                                case ScriptEvent.BattleTurnStarted when component is IBattleTurnStartEffect start:
-                                    start.OnBattleTurnStarted();
-                                    break;
-
-                                case ScriptEvent.BattleUnitActionEnded when component is IBattleUnitActionEndEffect action:
-                                    action.OnBattleUnitActionEnded();
-                                    break;
-
-                                case ScriptEvent.BattleTurnEnded when component is IBattleTurnEndEffect end:
-                                    end.OnBattleTurnEnded();
-                                    break;
-                            }
-                        }
-                    }
-                }
-            }
-
-            World.Events.DispatchBattle(Battle);
-        }
-        finally
-        {
-            Battle.EndEvent();
-        }
-    }
-
-    public void EndBattle() => Battle.Dispose();
-
-    private void OnSessionEnded(ulong session) => components.Clear();
-
-    public void Dispose()
-    {
-        World.SessionEnded -= OnSessionEnded;
-        Battle.Dispose();
-
-        foreach (var component in components.Values)
-            component.GameObject.RemoveComponent(component);
-
-        components.Clear();
     }
 }

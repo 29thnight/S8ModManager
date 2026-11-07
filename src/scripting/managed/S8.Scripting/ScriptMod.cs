@@ -12,6 +12,7 @@ public abstract class ScriptMod : IScriptModule
     private GameApplication? application;
     private int optionsOwner;
     private Action<int, int>? optionChanged;
+    private BattleEffects? effects;
 
     public ModContext Context { get; private set; } = null!;
 
@@ -19,6 +20,9 @@ public abstract class ScriptMod : IScriptModule
         ?? throw new InvalidOperationException("The mod is not loaded yet.");
 
     public GameWorld World => Application.World;
+
+    // Battle effects: register, bind to a trait, and the SDK runs them.
+    public BattleEffects Effects => effects ??= new BattleEffects(World);
 
     // Return false while the mod holds unsaved state that a live reload would lose.
     public virtual bool CanReload => true;
@@ -143,7 +147,13 @@ public abstract class ScriptMod : IScriptModule
                 OnUiClosed();
                 return;
 
+            case ScriptEvent.BattleTurnStarted or ScriptEvent.BattleUnitActionEnded or ScriptEvent.BattleTurnEnded:
+                effects?.Dispatch(kind);
+                OnEvent(kind, owner, value);
+                return;
+
             case ScriptEvent.BattleSessionEnded:
+                effects?.EndBattle();
                 OnEvent(kind, owner, value);
                 if (World.SessionId != 0)
                     World.Events.Signal(WorldEventTriggers.BattleEnded);
@@ -165,6 +175,8 @@ public abstract class ScriptMod : IScriptModule
         finally
         {
             optionChanged = null;
+            effects?.Dispose();
+            effects = null;
             application?.Dispose();
             application = null;
             menus = null;
