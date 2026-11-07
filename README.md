@@ -27,7 +27,7 @@
   { "version": 1, "mods": [ { "id": "s8.editors", "enabled": true } ] }
   ```
 - 적재 규칙: 꺼진 모드, API 버전이 다른 모드, 필요한 모드가 없거나 버전이 낮은 모드는 건너뜁니다(연쇄 적용). 충돌하면 순서가 앞선 쪽만 적용합니다. 의존 모드는 항상 먼저 불러오고, 의존이 순환하면 모두 건너뜁니다. 건너뛴 이유는 `scripts\mod_manager.log`가 아니라 디버그 출력에 남습니다.
-- 모드는 자기 폴더만 씁니다. 자산은 `assets\`에서 읽고, 저장 파일(예: `san8r_traits_config.json`, `S8.Editors.jewels.json`)은 모드 폴더에 씁니다. 게임 폴더는 읽기만 합니다.
+- 모드는 기본적으로 자기 폴더에만 씁니다. 자산은 `assets\`에서 읽고, 저장 파일(예: `san8r_traits_config.json`, `S8.Editors.jewels.json`)은 모드 폴더에 씁니다. 예외는 하나입니다. 게임 폴더에 `hid.dll`(종합 치트 모드)이 있으면 기재 편집은 치트와 같은 `san8r_traits_config.json`을 게임 폴더에서 읽고 씁니다. 음성 설정은 치트가 모르는 값이라 모드 폴더의 `san8r_trait_voices.json`에 따로 씁니다.
 - 0.0.1(`s8.editors`)은 기재 편집과 보주 편집만 포함합니다. 다른 기능은 Release 빌드에서 제외합니다.
 - AOT판: `dotnet publish src/scripting/managed/S8.GameScripts -c Release -r win-x64 -p:PublishAot=true -o <게임>\scripts\mods\s8.editors.aot`
 
