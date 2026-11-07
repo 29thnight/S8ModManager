@@ -194,7 +194,8 @@ namespace s8::scripting {
     return state;
   }
 
-  ModSelection select_mods(std::vector<ModManifest> candidates, const ModState &state, std::uint32_t host_api) {
+  ModSelection select_mods(std::vector<ModManifest> candidates, const ModState &state, std::uint32_t host_api,
+                           std::uint32_t host_build) {
     std::map<std::string, std::vector<ModManifest>> groups;
     for (auto &candidate : candidates)
       groups[candidate.id].push_back(std::move(candidate));
@@ -227,6 +228,8 @@ namespace s8::scripting {
       else if (host_api != 0 && mod.api != 0 && mod.api != host_api)
         skip(std::move(mod), L"모드가 요구하는 API 버전(" + std::to_wstring(mod.api) + L")이 모드 매니저(" +
                                  std::to_wstring(host_api) + L")와 다릅니다.");
+      else if (host_build != 0 && mod.game_build != 0 && mod.game_build != host_build)
+        skip(std::move(mod), L"모드가 대상으로 하는 게임 빌드가 지금 게임과 다릅니다.");
       else
         active.push_back(std::move(mod));
     }

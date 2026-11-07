@@ -76,9 +76,9 @@ namespace s8::scripting {
 
   // One mod id is applied at most once: the higher version wins, and on a tie
   // JIT wins so a live-coded build replaces the shipped AOT build. Then disabled
-  // mods, API mismatches, unmet dependencies and conflicts are skipped, and the
+  // mods, API and game build mismatches, unmet dependencies and conflicts are skipped, and the
   // rest is ordered by the state file with every dependency loaded first.
-  // host_api 0 skips the API check.
+  // host_api 0 skips the API check, and host_build 0 the game build check.
   ModSelection select_mods(std::vector<ModManifest> candidates, const ModState &state = {},
-                           std::uint32_t host_api = 0);
+                           std::uint32_t host_api = 0, std::uint32_t host_build = 0);
 } // namespace s8::scripting

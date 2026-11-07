@@ -443,7 +443,7 @@ namespace {
   // Applies a selection to the running mods: mods that left it are stopped, the
   // rest run in its order, and new ones are loaded (or their kept slot reused).
   void apply_selection(const ModState &state, const EngineApi *api) {
-    auto selection = select_mods(host.found, state, api_version);
+    auto selection = select_mods(host.found, state, api_version, game_connection().game_build);
     const auto enabled = [&](const std::string &id) {
       const auto entry = std::ranges::find(state.mods, id, &ModStateEntry::id);
       return entry == state.mods.end() || entry->enabled;

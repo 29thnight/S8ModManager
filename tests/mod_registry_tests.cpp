@@ -147,4 +147,12 @@ void mod_state_and_order() {
   auto newer_api = manifest("api", {1, 0, 0}, ModRuntime::Jit, L"api");
   newer_api.api = 18;
   assert(select_mods({newer_api}, {}, 17).active.empty() && select_mods({newer_api}, {}, 0).active.size() == 1);
+
+  // A game build mismatch is skipped only when both sides declare one, and it cascades.
+  auto pinned = manifest("pinned", {1, 0, 0}, ModRuntime::Jit, L"p");
+  pinned.game_build = 0x69A67ED1;
+  const auto other_build = select_mods({pinned, needing("user", "pinned", {1, 0, 0}, L"u")}, {}, 0, 0x12345678);
+  assert(other_build.active.empty() && other_build.skipped.size() == 2);
+  assert(select_mods({pinned}, {}, 0, 0x69A67ED1).active.size() == 1);
+  assert(select_mods({pinned}, {}, 0, 0).active.size() == 1);
 }
