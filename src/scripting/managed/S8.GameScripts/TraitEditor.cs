@@ -484,12 +484,15 @@ public sealed class TraitEditorModule : IDisposable
     private sealed class Store
     {
         private readonly string path;
+        private readonly string? voicePath;
         private string? baseline;
         private JsonObject root;
 
         public Store(ModContext context)
         {
-            path = Path.Combine(context.ModDirectory, "san8r_traits_config.json");
+            path = TraitConfiguration.ConfigPath(context.GameDirectory, context.ModDirectory);
+            if (TraitConfiguration.SharesCheatFile(context.GameDirectory))
+                voicePath = Path.Combine(context.ModDirectory, TraitConfiguration.VoiceFileName);
             baseline = File.Exists(path) ? File.ReadAllText(path) : null;
             string defaults = TraitEditorModule.DefaultTraitsPath(context);
             string initial = baseline ?? (File.Exists(defaults) ? File.ReadAllText(defaults) : "{\"traits\":[]}");
@@ -528,16 +531,32 @@ public sealed class TraitEditorModule : IDisposable
 
             entry["name"] = draft.Name;
             entry["desc"] = draft.Description;
-            entry["voice"] = draft.Voice;
             entry["grade"] = draft.Grade;
+            if (voicePath == null)
+            {
+                entry["voice"] = draft.Voice;
+            }
+            else
+            {
+                entry.Remove("voice");
+                var voices = File.Exists(voicePath) ? JsonNode.Parse(File.ReadAllText(voicePath)) as JsonObject ?? new JsonObject() : new JsonObject();
+                voices[(draft.Source.Id - 1).ToString()] = draft.Voice;
+                Write(voicePath, voices.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+            }
             string content = next.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
-            string temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
 
-            File.WriteAllText(temporary, content);
-            File.Move(temporary, path, true);
+            Write(path, content);
             baseline = content;
             root = next;
             return null;
+        }
+
+        private static void Write(string target, string content)
+        {
+            string temporary = target + "." + Guid.NewGuid().ToString("N") + ".tmp";
+
+            File.WriteAllText(temporary, content);
+            File.Move(temporary, target, true);
         }
 
         public ushort ReadGrade(ushort id, ushort fallback) =>

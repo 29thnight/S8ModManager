@@ -1,19 +1,30 @@
 using S8.Scripting;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace S8.GameScripts;
 
-// Turns san8r_traits_config.json (in this mod's folder) into the trait catalog
+// Turns san8r_traits_config.json into the trait catalog
 // the native runtime applies. The rules follow the cheat's config reader so an
 // existing file keeps meaning the same thing.
 public static class TraitConfiguration
 {
     public const string FileName = "san8r_traits_config.json";
+    public const string VoiceFileName = "san8r_trait_voices.json";
 
-    // Publishes the mod's configuration. No file means nothing custom to apply.
+    // With the overlay cheat (hid.dll) beside the game, edits go to its own file in the
+    // game folder so both editors show one set of traits. Its reader rejects an entry
+    // that has "voice", so voices then live in this mod's folder instead.
+    public static bool SharesCheatFile(string gameDirectory) => File.Exists(Path.Combine(gameDirectory, "hid.dll"));
+
+    public static string ConfigPath(string gameDirectory, string modDirectory) =>
+        Path.Combine(SharesCheatFile(gameDirectory) ? gameDirectory : modDirectory, FileName);
+
+    // Publishes the configuration. No file means nothing custom to apply.
     public static string? Publish(ModContext context)
     {
-        string path = Path.Combine(context.ModDirectory, FileName);
+        MoveToCheatFile(context.GameDirectory, context.ModDirectory);
+        string path = ConfigPath(context.GameDirectory, context.ModDirectory);
         if (!File.Exists(path))
             return null;
 
@@ -21,8 +32,65 @@ public static class TraitConfiguration
         if (definitions == null)
             return error;
 
+        string voices = Path.Combine(context.ModDirectory, VoiceFileName);
+        if (SharesCheatFile(context.GameDirectory) && File.Exists(voices) && !MergeVoices(definitions, File.ReadAllBytes(voices)))
+            return "기재 음성 파일 형식이 올바르지 않습니다.";
+
         TraitCatalog.Publish(definitions);
         return null;
+    }
+
+    // Edits made before hid.dll was installed live in this mod's file. Copy them once to the
+    // game folder, voices split out, when the cheat has no file there yet. The mod's file stays.
+    public static void MoveToCheatFile(string gameDirectory, string modDirectory)
+    {
+        string own = Path.Combine(modDirectory, FileName), shared = Path.Combine(gameDirectory, FileName);
+        if (!SharesCheatFile(gameDirectory) || File.Exists(shared) || !File.Exists(own))
+            return;
+
+        var root = JsonNode.Parse(File.ReadAllText(own)) as JsonObject;
+        if (root == null)
+            return;
+        var voices = new JsonObject();
+        if (root["customNames"] is JsonObject names)
+            foreach (var (key, entry) in names)
+                if (entry is JsonObject fields && fields["voice"] is { } voice)
+                {
+                    voices[key] = voice.DeepClone();
+                    fields.Remove("voice");
+                }
+
+        var options = new JsonSerializerOptions { WriteIndented = true };
+        if (voices.Count != 0)
+            File.WriteAllText(Path.Combine(modDirectory, VoiceFileName), voices.ToJsonString(options));
+        string temporary = shared + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        File.WriteAllText(temporary, root.ToJsonString(options));
+        File.Move(temporary, shared);
+    }
+
+    // {"<index>": voice}. A voice applies only to a trait the configuration names.
+    public static bool MergeVoices(TraitDefinition?[] definitions, ReadOnlySpan<byte> json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json.ToArray());
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+                return false;
+            foreach (var entry in document.RootElement.EnumerateObject())
+            {
+                if (!int.TryParse(entry.Name, out int index) || index < 0 || index >= definitions.Length ||
+                    entry.Value.ValueKind != JsonValueKind.Number || !entry.Value.TryGetInt32(out int voice) ||
+                    voice < 0 || voice > 140)
+                    return false;
+                if (definitions[index] is { HasMetadata: true } definition)
+                    definitions[index] = definition with { Voice = voice };
+            }
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     public static TraitDefinition?[]? Read(ReadOnlySpan<byte> json, out string? error)

@@ -38,6 +38,11 @@ internal static class OptionsChecks
               rows[2].Description.Contains("불일치") && rows[2].Description.Contains("현재 충돌 없음"),
             "Skipped mod shows state, reason, mismatches and conflicts");
         Check(ModCatalog.Parse("21\t\n").GameBuild == 0, "Unknown game build parses as zero");
+        var external = ManagerMod.Rows(ModCatalog.Parse(
+            "21\t\nexternal.hid\thid.dll\t-\texternal\t1\tloaded\t\t0\t\t\t\n"))[0];
+        Check(external.Choices.SequenceEqual(["외부"]) && external.Description.Contains("외부 DLL") &&
+              !external.Description.Contains("EXTERNAL") && !external.Description.Contains("켜고 끄면"),
+            "External DLL is listed as a mod without a toggle");
         var reordered = ManagerMod.Ordered(catalog with { Mods = [catalog.Mods[2], catalog.Mods[0], catalog.Mods[1]] });
         Check(reordered.Mods.Select(mod => mod.Id).SequenceEqual(["old.mod", "s8.editors", "s8.manager"]),
             "Tab rows keep one order whatever the manager's list order");

@@ -97,6 +97,41 @@ namespace {
     OutputDebugStringW((L"[S8 mods] " + message + L"\n").c_str());
   }
 
+  // The game's job system links queued objects by 32-bit offsets (in 4-byte units) from
+  // a queue in its process heap, so what the game allocates must stay within 8 GB of that
+  // heap. A starting .NET GC reserves tens of GB in one block; placed right after the
+  // heap, it pushes every later game allocation out of range, and the game crashes in its
+  // job-system teardown at exit. Hold the free space after the heap while a runtime
+  // starts, so its reservations land beyond it, then give the space back to the game.
+  class NearHeapHold {
+  public:
+    NearHeapHold() {
+      constexpr std::uintptr_t span = 16ull << 30, granularity = 0x10000;
+      const auto base = reinterpret_cast<std::uintptr_t>(GetProcessHeap());
+      for (std::uintptr_t address = base; address < base + span;) {
+        MEMORY_BASIC_INFORMATION info{};
+        if (!VirtualQuery(reinterpret_cast<void *>(address), &info, sizeof(info)))
+          break;
+        const auto next = reinterpret_cast<std::uintptr_t>(info.BaseAddress) + info.RegionSize;
+        const auto start = (address + granularity - 1) & ~(granularity - 1);
+        const auto stop = std::min(next, base + span) & ~(granularity - 1);
+        if (info.State == MEM_FREE && stop > start)
+          if (void *held = VirtualAlloc(reinterpret_cast<void *>(start), stop - start, MEM_RESERVE, PAGE_NOACCESS))
+            held_.push_back(held);
+        address = next;
+      }
+    }
+    ~NearHeapHold() {
+      for (void *held : held_)
+        VirtualFree(held, 0, MEM_RELEASE);
+    }
+    NearHeapHold(const NearHeapHold &) = delete;
+    NearHeapHold &operator=(const NearHeapHold &) = delete;
+
+  private:
+    std::vector<void *> held_;
+  };
+
   std::filesystem::path module_directory() {
     wchar_t image[32768]{};
     HMODULE self = nullptr;
@@ -136,6 +171,7 @@ namespace {
     SetEnvironmentVariableW(L"DOTNET_MODIFIABLE_ASSEMBLIES", L"debug");
 
     hostfxr_handle context = nullptr;
+    const NearHeapHold hold;
 
     const auto config = directory / L"S8.Scripting.Host.runtimeconfig.json";
     const int result = init(config.c_str(), nullptr, &context);
@@ -195,6 +231,7 @@ namespace {
       return false;
     }
 
+    const NearHeapHold hold; // a NativeAOT library starts its own GC
     HMODULE library =
         LoadLibraryExW(path.c_str(), nullptr, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
     if (!library)
@@ -286,8 +323,35 @@ namespace {
     return std::filesystem::path(std::u8string(id.begin(), id.end())).wstring();
   }
 
+  // Proxy DLLs other tools put beside the game: hid.dll (the overlay cheat) and
+  // version.dll (an older trait editor). The game loads them, not the manager, so
+  // the list shows them as runtime "external", which SetModEnabled does not accept.
+  std::wstring external_mods() {
+    wchar_t executable[MAX_PATH]{};
+    if (!GetModuleFileNameW(nullptr, executable, MAX_PATH))
+      return {};
+    const auto directory = std::filesystem::path(executable).parent_path();
+    std::wstring lines;
+    struct External {
+      const wchar_t *id, *file, *name;
+    };
+    for (const auto &[id, file, name] : {External{L"external.hid", L"hid.dll", L"종합 치트 모드"},
+                                         External{L"external.version", L"version.dll", L"종합편집기 모드"}}) {
+      const auto path = directory / file;
+      std::error_code error;
+      if (!std::filesystem::is_regular_file(path, error))
+        continue;
+      // By full path: the system DLL of the same name is often loaded as well.
+      const bool running = GetModuleHandleW(path.c_str()) != nullptr;
+      lines += std::wstring(id) + L"\t" + name + L"\t-\texternal\t1\t" + (running ? L"loaded" : L"skipped") + L"\t" +
+               (running ? L"" : L"게임이 불러오지 않았습니다.") + L"\t0\t\t\t\n";
+    }
+    return lines;
+  }
+
   std::int64_t read_mod_list(void *data, std::uint32_t bytes) {
     std::wstring text = std::to_wstring(api_version) + L"\t" + hex(game_connection().game_build) + L"\n";
+    text += external_mods();
     for (const auto &item : host.listing) {
       const auto &mod = item.manifest;
       std::wstring dependencies, conflicts;

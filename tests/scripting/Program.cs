@@ -80,6 +80,7 @@ unsafe class Program
         checks += BattleLifetimeChecks.Run();
         checks += LiveSourceChecks.Run();
         checks += OptionsChecks.Run();
+        checks += TraitConfigurationChecks.Run();
         string output = Path.GetFullPath(args[0]);
         nint dll = NativeLibrary.Load(Path.Combine(output, "xinput1_4.dll"));
 

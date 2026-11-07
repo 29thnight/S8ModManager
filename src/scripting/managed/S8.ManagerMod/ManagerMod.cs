@@ -12,6 +12,8 @@ public sealed class ManagerMod : ScriptMod
     public const string SelfId = "s8.manager";
     private static readonly string[] Toggle = ["끔", "켬"];
     private static readonly string[] Required = ["필수"];
+    private static readonly string[] External = ["외부"];
+    private const string ExternalRuntime = "external";
 
     private ModCatalog catalog = null!;
 
@@ -42,13 +44,15 @@ public sealed class ManagerMod : ScriptMod
     public static List<OptionRow> Rows(ModCatalog catalog) =>
         catalog.Mods.Select((mod, index) => mod.Id == SelfId
                 ? new OptionRow(index, Label(mod), Describe(catalog, mod), Required)
-                : new OptionRow(index, Label(mod), Describe(catalog, mod), Toggle, mod.Enabled ? 1 : 0))
+                : mod.Runtime == ExternalRuntime
+                    ? new OptionRow(index, Label(mod), Describe(catalog, mod), External)
+                    : new OptionRow(index, Label(mod), Describe(catalog, mod), Toggle, mod.Enabled ? 1 : 0))
             .ToList();
 
     private void Changed(int action, int choice)
     {
         var mod = catalog.Mods[action];
-        if (mod.Id != SelfId)
+        if (mod.Id != SelfId && mod.Runtime != ExternalRuntime)
             ModCatalog.SetEnabled(mod.Id, choice == 1);
     }
 
@@ -61,7 +65,7 @@ public sealed class ManagerMod : ScriptMod
         var lines = new List<string>
         {
             $"【{Label(mod)}】",
-            $"{mod.Id} / 판 {mod.Version} / {mod.Runtime.ToUpperInvariant()}",
+            $"{mod.Id} / 판 {mod.Version} / {(mod.Runtime == ExternalRuntime ? "외부" : mod.Runtime.ToUpperInvariant())}",
             "상태: " + mod.State switch
             {
                 ModLoadState.Loaded => "적용 중",
@@ -93,7 +97,9 @@ public sealed class ManagerMod : ScriptMod
         }
 
         lines.Add("");
-        lines.Add(mod.Id == SelfId ? "이 탭을 표시하는 모드라 끌 수 없습니다." : "켜고 끄면 바로 적용됩니다.");
+        lines.Add(mod.Id == SelfId ? "이 탭을 표시하는 모드라 끌 수 없습니다."
+            : mod.Runtime == ExternalRuntime ? "게임 폴더의 외부 DLL입니다. 게임이 직접 불러오므로 여기서 끌 수 없습니다."
+            : "켜고 끄면 바로 적용됩니다.");
         return string.Join("\n", lines);
     }
 

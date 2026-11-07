@@ -225,6 +225,78 @@ bool executable_address(std::uintptr_t address) {
         protection == PAGE_EXECUTE_READWRITE || protection == PAGE_EXECUTE_WRITECOPY;
 }
 
+// The overlay cheat (hid.dll beside the game) installs its own hooks after checking
+// each function's original first bytes, and reads the official traits only once its
+// description hook is in place. Our hooks therefore go on top of its hooks: a target
+// that already jumps into that hid.dll is accepted, and MinHook chains over it.
+// The system hid.dll is loaded too, so the cheat is looked up by its full path.
+std::wstring game_directory_file(const wchar_t* name) {
+    std::array<wchar_t, MAX_PATH> game{};
+
+    if (!GetModuleFileNameW(nullptr, game.data(), MAX_PATH)) {
+        return {};
+    }
+    std::wstring_view directory(game.data());
+    directory = directory.substr(0, directory.find_last_of(L'\\') + 1);
+    return std::wstring(directory) + name;
+}
+
+HMODULE overlay_cheat_module() {
+    const std::wstring path = game_directory_file(L"hid.dll");
+    return path.empty() ? nullptr : GetModuleHandleW(path.c_str());
+}
+
+// E9 rel32 to a MinHook relay, FF 25 00000000 and the detour address, inside hid.dll.
+bool hooked_by_overlay_cheat(std::uintptr_t target, HMODULE cheat) {
+    std::array<std::uint8_t, 5> jump{};
+    std::array<std::uint8_t, 14> relay{};
+
+    if (!cheat || !read_value(target, jump) || jump[0] != 0xE9) {
+        return false;
+    }
+    std::int32_t displacement = 0;
+    std::memcpy(&displacement, jump.data() + 1, sizeof(displacement));
+    const std::uintptr_t relay_address = target + 5 + static_cast<std::intptr_t>(displacement);
+    if (!read_value(relay_address, relay) || relay[0] != 0xFF || relay[1] != 0x25 || relay[2] || relay[3] || relay[4] || relay[5]) {
+        return false;
+    }
+    std::uintptr_t detour = 0;
+    HMODULE owner = nullptr;
+    std::memcpy(&detour, relay.data() + 6, sizeof(detour));
+    return GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+               reinterpret_cast<LPCWSTR>(detour), &owner) && owner == cheat;
+}
+
+// The cheat hooks these itself (measured on its 2026-11-04 build): the name and
+// description getters always, and the trait lookup only when its trait file is in the
+// game folder. Wait for it before taking them, but not forever, in case it skips one.
+constexpr std::array<std::uintptr_t, 2> OVERLAY_CHEAT_TARGETS{0x170e2d0, 0x171e070};
+constexpr std::uintptr_t OVERLAY_CHEAT_LOOKUP_TARGET = 0x17aad60;
+constexpr std::uint64_t OVERLAY_CHEAT_WAIT_MS = 20000;
+std::atomic<std::uint64_t> overlay_cheat_deadline{0};
+
+bool overlay_cheat_pending(std::uintptr_t module_base, HMODULE cheat) {
+    if (!cheat) {
+        return false;
+    }
+    const std::uint64_t now = GetTickCount64();
+    std::uint64_t deadline = overlay_cheat_deadline.load(std::memory_order_acquire);
+    if (!deadline) {
+        overlay_cheat_deadline.compare_exchange_strong(deadline, now + OVERLAY_CHEAT_WAIT_MS, std::memory_order_acq_rel);
+        deadline = overlay_cheat_deadline.load(std::memory_order_acquire);
+    }
+    if (now >= deadline) {
+        return false;
+    }
+    const auto pending = [&](std::uintptr_t offset) { return !hooked_by_overlay_cheat(module_base + offset, cheat); };
+    if (std::ranges::any_of(OVERLAY_CHEAT_TARGETS, pending)) {
+        return true;
+    }
+    const std::wstring traits = game_directory_file(L"san8r_traits_config.json");
+    return !traits.empty() && GetFileAttributesW(traits.c_str()) != INVALID_FILE_ATTRIBUTES &&
+           pending(OVERLAY_CHEAT_LOOKUP_TARGET);
+}
+
 bool valid_game_object(void* object) {
     std::uintptr_t vtable = 0;
     std::uintptr_t validate = 0;
@@ -795,11 +867,17 @@ bool install_hooks(TraitRuntimeNative& state, std::uintptr_t module_base) {
     }
     state.module_base = module_base;
     control_owner.store(&state, std::memory_order_release);
+    const HMODULE cheat = overlay_cheat_module();
+    if (state.created_hooks == 0 && overlay_cheat_pending(module_base, cheat)) {
+        state.status = TraitRuntimeStatus::CallbackBusy;
+        return false;
+    }
     for (std::size_t index = state.created_hooks; index < HOOK_SPECS.size(); ++index) {
         const HookSpec& spec = HOOK_SPECS[index];
         const std::uintptr_t target = module_base + spec.offset;
 
-        if (!executable_address(target) || (!spec.prologue.empty() && !native_bytes_match(target, spec.prologue))) {
+        if (!executable_address(target) ||
+            (!spec.prologue.empty() && !native_bytes_match(target, spec.prologue) && !hooked_by_overlay_cheat(target, cheat))) {
             state.status = TraitRuntimeStatus::UnsupportedVersion;
             return false;
         }
