@@ -268,7 +268,8 @@ namespace {
   }
 
   // A missing file is created and newly found mods are appended. A file that
-  // does not parse is left untouched so the user's edits are not overwritten.
+  // does not parse is left untouched so the user's edits are not overwritten,
+  // and no mod loads: treating it as empty would re-enable mods the user switched off.
   ModState load_state(const std::filesystem::path &path, const std::vector<ModManifest> &found) {
     ModState state;
     std::error_code error;
@@ -279,8 +280,8 @@ namespace {
       content << file.rdbuf();
       auto parsed = parse_mod_state(content.str());
       if (!parsed) {
-        log(path.wstring() + L": " + parsed.error() + L" 모든 모드를 켜진 것으로 봅니다.");
-        return {};
+        log(path.wstring() + L": " + parsed.error() + L" 파일을 고칠 때까지 모드를 하나도 적재하지 않습니다.");
+        return blocked_mod_state(found);
       }
       state = std::move(*parsed);
     }
@@ -298,7 +299,17 @@ namespace {
   bool save_state(const std::filesystem::path &path, const ModState &state) {
     std::error_code error;
     const auto temporary = path.wstring() + L".tmp";
-    std::ofstream(temporary, std::ios::binary | std::ios::trunc) << write_mod_state(state);
+    {
+      // A short write (full disk) must not replace the good file with a partial one.
+      std::ofstream file(temporary, std::ios::binary | std::ios::trunc);
+      file << write_mod_state(state);
+      file.close();
+      if (!file) {
+        std::filesystem::remove(temporary, error);
+        log(path.wstring() + L": 임시 파일을 쓰지 못해 상태 파일을 저장하지 않았습니다.");
+        return false;
+      }
+    }
     std::filesystem::rename(temporary, path, error);
     if (error)
       log(path.wstring() + L": 상태 파일을 저장하지 못했습니다.");

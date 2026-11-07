@@ -98,6 +98,12 @@ void mod_state_and_order() {
                                                manifest("a", {1, 0, 0}, ModRuntime::Jit, L"a")});
   assert(merged.mods.size() == 3 && merged.mods[0].id == "b" && merged.mods[2].id == "c" && merged.mods[2].enabled);
 
+  // An unreadable state file loads nothing, so a mod the user switched off stays off.
+  const std::vector<ModManifest> found{manifest("a", {1, 0, 0}, ModRuntime::Jit, L"a"),
+                                      manifest("b", {1, 0, 0}, ModRuntime::Jit, L"b")};
+  const auto blocked = select_mods(found, blocked_mod_state(found));
+  assert(blocked.active.empty() && blocked.skipped.size() == 2);
+
   // Disabled mods are skipped; the state file decides the order.
   ModState order{{{"z", true}, {"y", false}, {"x", true}}};
   auto ordered = select_mods({manifest("x", {1, 0, 0}, ModRuntime::Jit, L"x"),

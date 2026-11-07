@@ -69,6 +69,8 @@ namespace s8::scripting {
   // Appends newly found ids (enabled) and keeps entries for absent mods, so a
   // mod that is removed for a while keeps its setting and position.
   ModState merge_mod_state(ModState state, const std::vector<ModManifest> &found);
+  // Every found mod switched off: used when mods.json does not parse.
+  ModState blocked_mod_state(const std::vector<ModManifest> &found);
 
   // One mod id is applied at most once: the higher version wins, and on a tie
   // JIT wins so a live-coded build replaces the shipped AOT build. Then disabled

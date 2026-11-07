@@ -167,6 +167,14 @@ namespace s8::scripting {
     return nlohmann::json{{"version", 1}, {"mods", mods}}.dump(2) + "\n";
   }
 
+  ModState blocked_mod_state(const std::vector<ModManifest> &found) {
+    ModState state;
+    for (const auto &manifest : found)
+      if (std::ranges::none_of(state.mods, [&](const auto &entry) { return entry.id == manifest.id; }))
+        state.mods.push_back({manifest.id, false});
+    return state;
+  }
+
   ModState merge_mod_state(ModState state, const std::vector<ModManifest> &found) {
     std::vector<std::string> added;
     for (const auto &manifest : found)
