@@ -24,13 +24,13 @@ ui_detail::Hook palace_menu_hook{}, city_command_click_hook{};
 ui_detail::Hook city_command_update_hook{};
 extern std::atomic<bool> privileged_march_pending;
 
-bool ensure_application() {
-  if (!application_ready) {
+bool ensure_application(bool refresh = false) {
+  if (!application_ready || (refresh && !native_ui_active.load(std::memory_order_acquire))) {
     {
       std::lock_guard lock(native_ui_mutex);
       native_ui_session.source = native_ui_publication;
     }
-    application_ready = dispatch_mod_event(Event::Configure, 0);
+    application_ready = dispatch_mod_event(Event::Configure, 0, refresh ? 1 : 0);
   }
   return application_ready;
 }
@@ -44,10 +44,9 @@ void native_menu_controls(void *group, const NativeMenuControl *controls, int co
   }
   // Load mods with the first game menu (the title menu), before "resume" can load
   // a save: the trait mod must publish its custom traits before the save is read.
-  ensure_application();
   const auto type = native_field<std::uintptr_t>(parent, 0) - native_ui_module;
   if (type == 0x2590970 && count == 8) {
-    const bool ready = ensure_application();
+    const bool ready = ensure_application(true);
     original(group, controls, count, parent);
     if (ready)
       bind_native_window(parent);
@@ -58,10 +57,11 @@ void native_menu_controls(void *group, const NativeMenuControl *controls, int co
                        : type == 0x271EDC0 && count == 6 ? MenuSurface::InGameEdit
                                                          : MenuSurface::Function;
   if (!((type == 0x271EB28 || type == 0x271EDC0) && count == 6) && !(type == 0x2701888 && count == 13)) {
+    ensure_application();
     original(group, controls, count, parent);
     return;
   }
-  if (!ensure_application()) {
+  if (!ensure_application(true)) {
     original(group, controls, count, parent);
     return;
   }
@@ -100,11 +100,7 @@ bool dispatch_menu_action(MenuSurface surface, int id) {
     return false;
   if (native_ui_active.load(std::memory_order_acquire))
     return true;
-  if (!dispatch_mod_event(Event::Configure, 0))
-    return true;
   const auto found = std::find_if(menu_registrations.begin(), menu_registrations.end(), matches);
-  if (found == menu_registrations.end())
-    return true;
   {
     std::lock_guard lock(native_ui_mutex);
     if (!native_ui_publication.ready)
@@ -125,7 +121,7 @@ bool dispatch_menu_click(MenuSurface surface, void **argument) {
 void native_palace_commands(void *layout, void *city) {
   reinterpret_cast<void (*)(void *, void *)>(palace_menu_hook.original)(layout, city);
   palace_command_layout = layout;
-  if (!ensure_application())
+  if (!ensure_application(true))
     return;
 
   // CityUILayoutCommandList owns eight pre-created CityUILayoutCommandListBtn objects.

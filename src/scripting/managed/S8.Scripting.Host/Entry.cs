@@ -119,7 +119,7 @@ public static unsafe class Entry
             else if (live != null)
                 live.Rebuild();
 
-            var next = new ScriptContext(assembly);
+            var next = new ScriptContext(live == null ? assembly : null);
             using var stream = new MemoryStream(live?.Image ?? File.ReadAllBytes(assembly));
             var loaded = next.LoadFromStream(stream);
             var sdk = typeof(IScriptModule).Assembly.GetName();
@@ -145,16 +145,16 @@ public static unsafe class Entry
         }
     }
 
-    private sealed class ScriptContext(string path) : AssemblyLoadContext(isCollectible: true)
+    private sealed class ScriptContext(string? path) : AssemblyLoadContext(isCollectible: true)
     {
-        private readonly AssemblyDependencyResolver resolver = new(path);
+        private readonly AssemblyDependencyResolver? resolver = path == null ? null : new(path);
 
         protected override Assembly? Load(AssemblyName name)
         {
             if (name.Name == typeof(IScriptModule).Assembly.GetName().Name)
                 return typeof(IScriptModule).Assembly;
 
-            string? dependency = resolver.ResolveAssemblyToPath(name);
+            string? dependency = resolver?.ResolveAssemblyToPath(name);
 
             if (dependency == null)
                 return null;

@@ -92,7 +92,7 @@ public sealed class HelloMod : ScriptMod
 }
 ```
 
-빌드한 DLL과 `mod.json` 을 모드 폴더에 넣고 게임을 켜면 됩니다. 새 모드는 `scripts\mods.json` 끝에 켜진 상태로 덧붙습니다.
+빌드한 DLL과 `mod.json` 을 모드 폴더에 넣고 게임에서 편집 메뉴나 시작 화면의 환경설정을 다시 열면 됩니다. 새 모드는 `scripts\mods.json` 끝에 켜진 상태로 덧붙습니다.
 
 ## 2. 모드의 수명
 

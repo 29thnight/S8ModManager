@@ -1,0 +1,16 @@
+{
+  "name": "s8-mod-tools",
+  "displayName": "S8 Mod Tools",
+  "description": "삼국지 8 REMAKE PK용 C# 모드를 만듭니다.",
+  "publisher": "29thnight",
+  "version": "0.0.1",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Other"],
+  "repository": { "type": "git", "url": "https://github.com/29thnight/S8ModManager.git" },
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "s8ModTools.createMod", "title": "S8: 새 모드 만들기" }
+    ]
+  }
+}

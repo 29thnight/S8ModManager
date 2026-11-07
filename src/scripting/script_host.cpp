@@ -391,6 +391,7 @@ namespace {
       const auto kept = std::ranges::find_if(host.mods, [&](const LoadedMod &mod) { return same_mod(mod.manifest, manifest); });
       if (kept != host.mods.end()) {
         kept->active = true;
+        kept->manifest = manifest;
         ordered.push_back(std::move(*kept));
         host.mods.erase(kept);
       } else {
@@ -407,8 +408,13 @@ namespace {
     }
     // Stopped mods (and AOT mods that could not stop) keep their slots after the selection.
     for (auto &mod : host.mods)
-      if (!selected(mod.manifest))
+      if (!selected(mod.manifest)) {
+        if (mod.active && std::ranges::none_of(host.found, [&](const auto &manifest) {
+              return same_mod(mod.manifest, manifest);
+            }))
+          unload(mod, api);
         ordered.push_back(std::move(mod));
+      }
     host.mods = std::move(ordered);
   }
 
@@ -461,14 +467,22 @@ extern "C" __declspec(dllexport) int S8ScriptDispatch(const s8::scripting::Engin
   if (!api->invoke)
     return static_cast<int>(Status::InvalidApi);
 
-  if (!host.loaded)
+  const bool first_load = !host.loaded;
+  if (first_load)
     load_mods();
 
   const EngineApi facade{api_version, sizeof(EngineApi), connection, invoke};
   const auto *previous = current;
   current = api;
 
+  // Menu construction requests discovery before any controls are built.
+  if (!first_load && !previous && event == Event::Configure && action == 1) {
+    host.found = scan_mods(host.base / L"scripts" / L"mods");
+    apply_selection(load_state(state_path(), host.found), &facade);
+  }
+
   int result = 0;
+  bool configured = false;
   for (const auto &mod : host.mods) {
     if (!mod.active)
       continue;
@@ -476,6 +490,7 @@ extern "C" __declspec(dllexport) int S8ScriptDispatch(const s8::scripting::Engin
                                : host.managed_dispatch(&facade, mod.handle, static_cast<int>(event), page, action);
     if (result == 0)
       result = status;
+    configured |= status == 0;
   }
 
   // A mod switched on or off in a callback takes effect once every mod has had
@@ -484,7 +499,7 @@ extern "C" __declspec(dllexport) int S8ScriptDispatch(const s8::scripting::Engin
     reselect_mods(&facade);
 
   current = previous;
-  return result;
+  return event == Event::Configure && configured ? 0 : result;
 }
 
 namespace s8::scripting {

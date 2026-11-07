@@ -60,8 +60,10 @@ std::uintptr_t options_set_tabs(void *group, std::uintptr_t x, std::uintptr_t y,
   using SetTabs = std::uintptr_t (*)(void *, std::uintptr_t, std::uintptr_t, void *, const wchar_t *const *,
                                      std::uintptr_t, std::uintptr_t, std::uintptr_t);
   const auto original = reinterpret_cast<SetTabs>(options_set_tabs_hook.original);
-  if (!option_tab || reinterpret_cast<std::uintptr_t>(labels) != native_ui_module + options_tab_labels ||
+  if (reinterpret_cast<std::uintptr_t>(labels) != native_ui_module + options_tab_labels ||
       static_cast<std::uint32_t>(count) != options_game_tabs || !is_title_options_screen(owner))
+    return original(group, x, y, owner, labels, count, a7, a8);
+  if (!ensure_application(true) || !option_tab)
     return original(group, x, y, owner, labels, count, a7, a8);
 
   auto &extended = option_tab->tab_labels;

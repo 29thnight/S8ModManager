@@ -5,6 +5,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Version>0.0.1</Version>
+    <DefineConstants Condition="'$(PublishAot)'=='true'">$(DefineConstants);S8_AOT</DefineConstants>
+    <NativeLib Condition="'$(PublishAot)'=='true'">Shared</NativeLib>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="..\S8.Scripting\S8.Scripting.csproj" /></ItemGroup>
+  <Target Name="S8WriteAotManifest" AfterTargets="Publish" Condition="'$(PublishAot)'=='true'">
+    <Copy SourceFiles="mod.aot.json" DestinationFiles="$(PublishDir)mod.json" />
+  </Target>
 </Project>
