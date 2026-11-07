@@ -9,23 +9,33 @@
 확인하여 실제 레코드를 다시 찾는다. C#이 전달한 임의 포인터나 함수 주소를 실행하지 않는다.
 주기적인 전체 장수·도시 스캔은 추가하지 않았다.
 
-```csharp
-var officer = world.GetOfficer(officerId);
-var stats = officer.GetComponent<OfficerStatsComponent>()!;
-var fame = officer.GetComponent<OfficerFameComponent>()!;
-var training = officer.GetComponent<OfficerTrainingComponent>()!;
-var traits = officer.GetComponent<OfficerTraitsComponent>()!;
+능력치·금·행동력·명성과 도시 값은 `Officer`·`City` 핸들의 속성으로 고친다.
+핸들은 ID와 세션만 들고, 같은 네이티브 요청을 쓴다. 이전 세션의 핸들은 `StaleSession`으로 거부된다.
 
-byte applied = stats.Set(OfficerStat.Intelligence, 95);
-ushort civil = fame.Set(OfficerFame.Civil, 1000);
+```csharp
+var officer = world.Officer(officerId);   // 주인공은 world.PlayerOfficer
+officer.Intelligence = 95;
+officer.CivilFame = 1000;
+officer.Gold += 1000;
+
+var city = world.City(cityId);
+city.Gold += 5000;
+city.Development = 800;
+```
+
+훈련·기재 칸처럼 번호로 고르는 값은 컴포넌트로 다룬다.
+
+```csharp
+var holder = world.GetOfficer(officerId);
+var training = holder.GetComponent<OfficerTrainingComponent>()!;
 training.SetTactic(1, TrainingLevel.Three);
 training.SetSkill(1, TrainingLevel.Two);
-traits.SetSlot(2, 254);
-
-var city = world.GetCity(cityId).GetComponent<CityAdministrationComponent>()!;
-uint gold = city.Add(CityValue.Gold, 5000);
-city.Set(CityValue.Development, 800);
+holder.GetComponent<OfficerTraitsComponent>()!.SetSlot(2, 254);
 ```
+
+속성 설정자는 게임이 실제로 적용한 값을 돌려주지 않는다. 상한에 걸려 잘렸는지 알아야 하면
+다시 읽거나 컴포넌트의 `Set`(적용값 반환)을 쓴다. 속성의 `+=`는 읽고 쓰는 두 요청이며,
+컴포넌트의 `Add`처럼 네이티브 증감(양수 99999 제한)을 거치지 않는다.
 
 이벤트의 `CanExecute/Execute`에서도 같은 컴포넌트를 사용할 수 있다.
 기재 ID 254는 사용 예일 뿐이며 원하는 기재의 실제 ID를 지정한다.

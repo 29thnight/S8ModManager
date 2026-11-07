@@ -58,7 +58,7 @@ public sealed class PersonalActivityProbe : Component,
         var world = GameObject.World!;
         ushort officerId = GameObject.GetComponent<OfficerComponent>()!.Id;
         bool sameObject = ReferenceEquals(world.GetOfficer(officerId), GameObject);
-        byte politics = GameObject.GetComponent<OfficerStatsComponent>()!.Get(OfficerStat.Politics);
+        byte politics = world.Officer(officerId).Politics;
 
         File.AppendAllText(LogPath,
             $"{DateTimeOffset.Now:O} event={kind} instance={instance:N} session={world.SessionId} " +
