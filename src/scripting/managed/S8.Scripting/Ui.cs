@@ -59,7 +59,6 @@ public sealed class UiScene : IDisposable
 {
     private readonly Dictionary<int, DialogComponent> dialogs = [];
     private readonly List<GameObject> objects = [];
-    private static int nextOwner;
     // Which scene, and which mod, created each live dialog. JIT mods share this SDK
     // assembly and every mod receives every event, so a dialog event is routed only
     // from the mod that created the dialog; otherwise each running mod would deliver it.
@@ -91,7 +90,7 @@ public sealed class UiScene : IDisposable
         var gameObject = CreateObject(name);
         var dialog = gameObject.AddComponent<DialogComponent>();
 
-        dialog.Owner = checked(++nextOwner);
+        dialog.Owner = Native.NewUiId();
         dialogs.Add(dialog.Owner, dialog);
         owners.Add(dialog.Owner, (this, Dispatching));
         return dialog;

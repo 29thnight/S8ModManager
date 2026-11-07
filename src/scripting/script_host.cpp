@@ -6,6 +6,7 @@
 
 #include <Windows.h>
 #include <algorithm>
+#include <atomic>
 #include <cstring>
 #include <utility>
 #include <coreclr_delegates.h>
@@ -34,6 +35,11 @@ namespace {
     if (!current)
       return -1;
 
+    if (operation == Operation::NewUiId) {
+      static std::atomic<std::int32_t> next{0};
+      const std::int32_t id = next.fetch_add(1, std::memory_order_relaxed) + 1;
+      return id > 0 ? id : -1;
+    }
     if (operation == Operation::ReadModList)
       return read_mod_list(data, bytes);
     if (operation == Operation::SetModEnabled)

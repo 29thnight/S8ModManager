@@ -4,25 +4,24 @@ namespace S8.GameScripts;
 
 public sealed class CouncilStrategyMenuSetup : GameSetup
 {
-    private const int MenuAction = 700;
-    private const int CouncilRoomAction = 701;
+    private int menuAction, councilRoomAction;
     private GameWorld world = null!;
 
     public override void Configure(GameApplication application)
     {
         world = application.World;
         var menu = application.CreateObject("CouncilStrategyMenu").AddComponent<MenuExtensionComponent>();
-        menu.AddPalace(MenuAction, "월간 상신");
-        menu.AddPalace(CouncilRoomAction, "평정실 진입");
+        menuAction = menu.AddPalace("월간 상신");
+        councilRoomAction = menu.AddPalace("평정실 진입");
     }
 
     public override bool Handle(ScriptEvent kind, int owner, int value)
     {
-        if (kind != ScriptEvent.MenuClick || value is not (MenuAction or CouncilRoomAction))
+        if (kind != ScriptEvent.MenuClick || (value != menuAction && value != councilRoomAction))
             return false;
 
         if (world.SessionId != 0)
-            world.Events.Signal(value == CouncilRoomAction
+            world.Events.Signal(value == councilRoomAction
                 ? CouncilStrategyMenuEvent.RoomTrigger
                 : CouncilStrategyMenuEvent.Trigger);
         return true;

@@ -8,9 +8,6 @@ public abstract class ScriptMod : IScriptModule
     private readonly Dictionary<int, Action> menuActions = [];
     private readonly Dictionary<int, WindowRow> windowRows = [];
     private readonly Dictionary<int, WindowRow> openWindows = [];
-    // Action numbers come back in menu and window events without the registering mod,
-    // so they are unique across every mod that shares this SDK.
-    private static int nextAction;
     private MenuExtensionComponent? menus;
     private GameApplication? application;
     private int optionsOwner;
@@ -46,7 +43,7 @@ public abstract class ScriptMod : IScriptModule
 
     protected void AddMenu(MenuSurface surface, string label, Action clicked, int templateId = 5, int insertAfter = 5)
     {
-        int action = Interlocked.Increment(ref nextAction) - 1;
+        int action = Native.NewUiId();
         menuActions.Add(action, clicked);
         Menus.Add(surface, action, label, templateId, insertAfter);
     }
@@ -55,7 +52,7 @@ public abstract class ScriptMod : IScriptModule
     protected void AddWindowRow(int slot, string label, string button, Action<int> clicked,
         Action<int, bool>? closing = null)
     {
-        int action = Interlocked.Increment(ref nextAction) - 1;
+        int action = Native.NewUiId();
         windowRows.Add(action, new WindowRow(clicked, closing));
         Menus.AddWindowRow(slot, action, label, button);
     }

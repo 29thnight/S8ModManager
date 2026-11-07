@@ -136,7 +136,8 @@ internal enum Operation
     SetRowBadge,
     SetOptionsTab,
     ReadModList,
-    SetModEnabled
+    SetModEnabled,
+    NewUiId
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -203,6 +204,10 @@ public static unsafe class Native
 
         return result;
     }
+
+    // Menu, window and dialog events carry these numbers without the registering mod.
+    // An SDK counter would repeat across NativeAOT mods, which each have their own copy.
+    internal static int NewUiId() => checked((int)Call(Operation.NewUiId));
 
     internal static string ReadString(Operation operation, ulong target = 0, long argument = 0)
     {

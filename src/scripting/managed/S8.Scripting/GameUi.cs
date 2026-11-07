@@ -37,12 +37,17 @@ public enum MenuSurface
 
 public sealed unsafe class MenuExtensionComponent : Component
 {
-    private static int nextOwner;
-    private readonly int owner = Interlocked.Increment(ref nextOwner);
+    private readonly int owner = Native.NewUiId();
 
     public override void OnDisable() => Native.Call(Operation.ReleaseUiRegistration, (ulong)owner);
 
-    public void AddPalace(int action, string label) => Add(MenuSurface.Palace, action, label, 0, 0);
+    // Returns the action number MenuClick carries for this entry.
+    public int AddPalace(string label)
+    {
+        int action = Native.NewUiId();
+        Add(MenuSurface.Palace, action, label, 0, 0);
+        return action;
+    }
 
     public void Add(MenuSurface surface, int action, string label, int templateId, int insertAfter)
     {

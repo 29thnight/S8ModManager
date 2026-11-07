@@ -156,8 +156,14 @@ namespace s8::scripting {
     SetRowBadge,
     SetOptionsTab,
     ReadModList,
-    SetModEnabled
+    SetModEnabled,
+    NewUiId
   };
+
+  // NewUiId: a positive number unique in the process, for menu and window-row actions
+  // and dialog, menu and options-tab owners. Events carry these numbers without the
+  // registering mod, and every NativeAOT mod has its own copy of the SDK, so the host
+  // hands them out rather than an SDK counter.
 
   // SetTraitCatalog: one record per trait ID 1..254 (index = ID - 1). The C# mod
   // decides every value; the native runtime only applies them to the game.

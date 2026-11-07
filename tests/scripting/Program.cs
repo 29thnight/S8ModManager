@@ -15,6 +15,9 @@ unsafe class Program
     static int otherHandle = -1;
     // Menu and window-row actions by label, as the mods last registered them.
     static readonly Dictionary<string, int> actions = [];
+    // Numbers the fake host hands out start here, far from any SDK counter.
+    const int HostUiIdBase = 5000;
+    static int hostUiIds = HostUiIdBase;
     static int checks;
     static readonly List<View> views = [];
     // Trait record fixture; grade (offset 0x2E) is 1 as in real game records.
@@ -81,6 +84,7 @@ unsafe class Program
         checks += LiveSourceChecks.Run();
         checks += OptionsChecks.Run();
         checks += TraitConfigurationChecks.Run();
+        checks += WorldSaveChecks.Run();
         string output = Path.GetFullPath(args[0]);
         nint dll = NativeLibrary.Load(Path.Combine(output, "xinput1_4.dll"));
 
@@ -155,6 +159,9 @@ unsafe class Program
         api.Connection.Capabilities = NativeCapability.Ui | NativeCapability.GameData | NativeCapability.Memory;
         Check(Send(ScriptEvent.Open) == 0, "Manifest loads a mod");
         Check(Send(ScriptEvent.MenuClick, 0, actions["기재 편집"]) == 0, "Registered menu opens the trait editor");
+        // An AOT mod carries its own copy of the SDK, so numbers from an SDK counter repeat across mods.
+        Check(actions.Values.All(action => action > HostUiIdBase) && views[^1].Owner > HostUiIdBase,
+            "Menu, window and dialog numbers come from the host");
         Check(views[^1].Kind == DialogKind.List && views[^1].Rows.Count == 1, "Catalog built from engine data");
         int catalog = views[^1].Owner;
 
@@ -297,7 +304,7 @@ unsafe class Program
             }
             Check(!councilRoomOpen, "Previous council room closed");
             int before = views.Count;
-            Check(Send(ScriptEvent.MenuClick, 0, 701) == 0 && views.Count == before,
+            Check(Send(ScriptEvent.MenuClick, 0, actions["평정실 진입"]) == 0 && views.Count == before,
                 "Council room waits for the game scene");
             councilSprites.Clear();
             Check(Send(ScriptEvent.CouncilRoomReady) == 0 && views.Count == before + 1 &&
@@ -622,6 +629,8 @@ unsafe class Program
             case 66: // ReadModList: host API version and game build, no mods.
                 "21\t0\n".AsSpan().CopyTo(new Span<char>(data, (int)bytes / 2));
                 return 5;
+            case 68: // NewUiId: one number line for every mod in the process.
+                return ++hostUiIds;
             case 23: // ReadSelection
                 selectedJewels.AsSpan().CopyTo(new Span<int>(data, (int)bytes / 4));
                 return selectedJewels.Length;

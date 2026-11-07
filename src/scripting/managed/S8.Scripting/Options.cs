@@ -87,9 +87,7 @@ public sealed record ModCatalog(int HostApiVersion, uint GameBuild, IReadOnlyLis
 
 internal static unsafe class OptionsTabNative
 {
-    private static int nextOwner;
-
-    public static int NewOwner() => Interlocked.Increment(ref nextOwner);
+    public static int NewOwner() => Native.NewUiId();
 
     // Copies the rows into native strings for the call; the engine keeps its own copies.
     public static void Register(int owner, string label, IReadOnlyList<OptionRow> rows)
