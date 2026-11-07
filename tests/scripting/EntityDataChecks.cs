@@ -188,8 +188,26 @@ internal static unsafe class EntityDataChecks
             Check(previousJewelsRejected && player.Jewels != jewels,
                 "Changing away and back cannot reactivate an old jewel component");
 
+            var me = world.PlayerOfficer;
+            me.Gold = 50;
+            me.Gold += 25;
+            Check(me.Gold == 75 && lastTarget == 565 && last.Kind == 1, "Officer handle reads and writes gold by property");
+            me.Intelligence = 90;
+            Check(me.Intelligence == 90 && last.Index == 3, "Officer handle stat uses the native stat ID");
+            Check(me == world.Officer(565), "Handles from the same session compare equal");
+            var town = world.City(1);
+            town.Grain = 400;
+            Check(town.Grain == 400 && lastTarget == 1 && last.Kind == 7 && last.Index == (uint)CityValue.Grain,
+                "City handle writes its own field");
+            Check(typeof(City).GetProperty(nameof(City.TechnologyLimit))!.CanWrite == false,
+                "A read-only city field has no setter");
+
             ++session;
             world.BeginSession(session, 565);
+            bool staleHandleRejected = false;
+            try { _ = me.Gold; }
+            catch (EngineCallException) { staleHandleRejected = true; }
+            Check(staleHandleRejected, "A handle from an earlier session is rejected");
             bool oldOfficerRejected = false, oldJewelsRejected = false, oldPlayerRejected = false, oldResourcesRejected = false;
             try { stats.Get(OfficerStat.Intelligence); }
             catch (EngineCallException) { oldOfficerRejected = true; }

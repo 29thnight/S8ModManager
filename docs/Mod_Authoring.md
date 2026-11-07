@@ -182,7 +182,8 @@ AOT 판은 .NET 런타임 없이 네이티브 DLL로 불립니다. 같은 모드
 | 기재 이름·설명·효과·음성·등급 바꾸기 | `TraitCatalog.Publish(TraitDefinition?[])`. 빈 칸은 게임 원래 값 | 확인 |
 | 기재 레코드 읽기 | `PersonalityComponent` | 확인 |
 | 보주 개방·강제 적용 | `JewelComponent`, `PlayerJewelsComponent`, `JewelComponent.RestoreForced` | 확인 |
-| 무장 능력치·명성·훈련·기재, 도시 값 | `OfficerStatsComponent`, `OfficerFameComponent`, `OfficerTrainingComponent`, `OfficerTraitsComponent`, `CityAdministrationComponent` | 도구에 있음. 이 문서에서 동작을 보증하지 않음 |
+| 무장 능력치·금·행동력·명성, 도시 값을 속성으로 | `World.PlayerOfficer`, `World.Officer(id)`, `World.City(id)`가 주는 `Officer`·`City` 핸들. 예: `World.PlayerOfficer.Gold += 1000`, `World.City(1).Grain = 400`. 세이브를 불러오면 이전 핸들은 `EngineCallException`으로 거부됨. 읽기 전용 값(`TechnologyLimit`)은 설정자가 없음 | 모의 시험으로 확인, 게임 안에서는 미확인 |
+| 훈련·기재 칸, 그 밖의 세부 | `OfficerStatsComponent`, `OfficerFameComponent`, `OfficerTrainingComponent`, `OfficerTraitsComponent`, `CityAdministrationComponent` | 도구에 있음. 이 문서에서 동작을 보증하지 않음 |
 | 소속(무장·도시) | `OfficerAffiliationComponent`, `CityAffiliationComponent` | 위와 같음 |
 | 세계·장면·주인공 | `World`(`GameWorld`): 세션, 현재 장면, 주인공, 무장·도시 목록과 그 사건 | 위와 같음 |
 | 세이브에 모드 자료 붙이기 | `World.SaveData` | 위와 같음 |
